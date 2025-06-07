@@ -4,15 +4,19 @@
 ~add x,y x + y
 ~sub x,y x - y
 
-(add 2 3)
-(add 2 v1)
-(sub 2 3)
+~print_both x,y (
+    print x
+    print y
+)
+~(
+    print (add 2 3)
+    print (add 2 v1)
+    print (sub 2 3)
 
-(add (sub 5 2) 3)
-(add 2 (sub 5 3))
-(sub (add 2 3) 1)
-
-~main(
-  print "Hello, world!"
-  (add 2 3)
+    print (add (sub 5 2) 3)
+    print (add 2 (sub 5 3))
+    print (sub (add 2 3) 1)
+    print "Hello, world!"
+    print (add 2 3)
+    print_both (add 2 3) (sub 5 3)
 )

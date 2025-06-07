@@ -23,34 +23,7 @@ let () =
   try
     let exprs = Parser.parse input in
     if !show_ast then Ast.print_ast exprs;
-    if !show_result then (
-      let rec eval_all env = function
-        | [] -> ()
-        | Parser.Let (name, _, value) :: rest ->
-            let v = Eval.eval env value in
-            Printf.printf "Let %s = %s\n"
-              name
-              (match v with
-               | Eval.IntVal n -> string_of_int n
-               | Eval.StrVal s -> s
-               | Eval.FunVal _ -> "<function>");
-            eval_all ((name, v) :: env) rest
-        | Parser.FunDef (name, args, body) :: rest ->
-            let v = Eval.FunVal (args, body, env) in
-            Printf.printf "Fun %s = <function>\n" name;
-            eval_all ((name, v) :: env) rest
-        | expr :: rest ->
-            let v = Eval.eval env expr in
-            Printf.printf "Result: %s\n"
-              (match v with
-               | Eval.IntVal n -> string_of_int n
-               | Eval.StrVal s -> s
-               | Eval.FunVal _ -> "<function>");
-            eval_all env rest
-      in
-      eval_all [] exprs
-    )
-    else if not !show_ast && not !show_result then
+    if not !show_ast then
       Eval.eval_toplevel [] exprs
   with
     | Parser.ParseError (msg, line, col) ->

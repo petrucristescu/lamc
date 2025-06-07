@@ -1,11 +1,9 @@
 # LAMC
 This is a compiler built using OCAML
 
-The intention is here is to build something as close as possible to the Lambda Calculus.
+The intention here is to build something as close as possible to [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus).
 
 The name comes from the lambda+calculus
-
-To learn more about the lambda calculus, you can visit [Wikipedia](https://en.wikipedia.org/wiki/Lambda_calculus).
 
 ### Prerequisites
 

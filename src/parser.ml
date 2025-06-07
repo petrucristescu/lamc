@@ -114,6 +114,10 @@ and parse_seq tokens =
 
 and parse_fun_def tokens =
   match tokens with
+  | Tilde :: LParen :: rest ->
+      (* Anonymous main function case *)
+      let body, rest' = parse_seq rest in
+      (FunDef ("main", [], body), rest')
   | Tilde :: Ident name :: rest ->
       let rec parse_args toks acc =
         match toks with

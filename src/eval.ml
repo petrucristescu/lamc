@@ -25,12 +25,10 @@ let rec eval env = function
   | App (f, a) ->
       (match eval env f with
        | FunVal (params, body, closure_env) when List.length params = 1 ->
-           (* Single parameter case *)
            let arg_val = eval env a in
            let new_env = (List.hd params, arg_val) :: closure_env in
            eval new_env body
        | FunVal (param :: rest_params, body, closure_env) ->
-           (* Multiple parameter case - partial application *)
            let arg_val = eval env a in
            let new_env = (param, arg_val) :: closure_env in
            if rest_params = [] then
@@ -66,14 +64,14 @@ let rec eval_toplevel env = function
          | FunVal _ -> "<function>");
       eval_toplevel ((name, v) :: env) rest
   | FunDef (name, args, body) :: rest ->
-      let v = FunVal (args, body, env) in
-      Printf.printf "Fun %s = <function>\n" name;
-      eval_toplevel ((name, v) :: env) rest
-  | expr :: rest ->
-      let v = eval env expr in
-      Printf.printf "Result: %s\n"
-        (match v with
-         | IntVal n -> string_of_int n
-         | StrVal s -> s
-         | FunVal _ -> "<function>");
+      if name = "main" && args = [] then (
+        let _ = eval env body in
+        eval_toplevel env rest
+      ) else (
+        let v = FunVal (args, body, env) in
+        Printf.printf "Fun %s = <function>\n" name;
+        eval_toplevel ((name, v) :: env) rest
+      )
+  | _ :: rest ->
+      (* Skip any other top-level expressions *)
       eval_toplevel env rest
