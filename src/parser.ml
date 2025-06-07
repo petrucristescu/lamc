@@ -32,6 +32,7 @@ type expr =
   | App of expr * expr
   | Let of string * typ * expr  (* variable name, type, value *)
   | FunDef of string * string list * expr
+  | Seq of expr * expr
   | Print of expr
 
 let tokenize s =
@@ -97,18 +98,38 @@ let tokenize s =
 
 let rec parse_expr tokens = parse_fun_def tokens
 
+and parse_seq tokens =
+  let rec aux toks acc =
+    match toks with
+    | RParen :: rest -> (List.rev acc, rest)
+    | _ ->
+        let expr, toks' = parse_expr toks in
+        aux toks' (expr :: acc)
+  in
+  let exprs, rest = aux tokens [] in
+  match exprs with
+  | [] -> (Int 0, rest)  (* or a Unit node if you add one *)
+  | [e] -> (e, rest)
+  | e1 :: es -> (List.fold_left (fun acc e -> Seq (acc, e)) e1 es, rest)
+
 and parse_fun_def tokens =
   match tokens with
   | Tilde :: Ident name :: rest ->
       let rec parse_args toks acc =
         match toks with
+        | LParen :: _ -> (List.rev acc, toks)  (* No arguments, next is body *)
         | Ident arg :: Comma :: rest' -> parse_args rest' (arg :: acc)
         | Ident arg :: rest' -> (List.rev (arg :: acc), rest')
         | _ -> raise (ParseError ("Expected argument name", 1, 1))
       in
       let args, rest' = parse_args rest [] in
-      let body, rest'' = parse_add rest' in
-      (FunDef (name, args, body), rest'')
+      (match rest' with
+       | LParen :: rest'' ->
+           let body, rest''' = parse_seq rest'' in
+           (FunDef (name, args, body), rest''')
+       | _ ->
+           let body, rest'' = parse_add rest' in
+           (FunDef (name, args, body), rest''))
   | _ -> parse_var_def tokens
 
 and parse_var_def tokens =
@@ -194,6 +215,7 @@ let rec string_of_expr = function
       " = " ^ string_of_expr value
   | FunDef (name, args, body) ->
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
+  | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
   | Print e -> "print " ^ string_of_expr e
 
 let string_of_exprs exprs =

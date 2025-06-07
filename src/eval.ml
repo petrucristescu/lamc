@@ -1,44 +1,51 @@
+open Parser
+
 exception EvalError of string
 
 type value =
   | IntVal of int
   | StrVal of string
-  | FunVal of string list * Parser.expr * env
+  | FunVal of string list * expr * env
 and env = (string * value) list
 
-let rec eval (env : env) (e : Parser.expr) : value =
-  match e with
-  | Parser.Int n -> IntVal n
-  | Parser.Str s -> StrVal s
-  | Parser.Add (a, b) ->
+let rec eval env = function
+  | Int n -> IntVal n
+  | Str s -> StrVal s
+  | Add (a, b) ->
       (match eval env a, eval env b with
        | IntVal x, IntVal y -> IntVal (x + y)
-       | _ -> raise (EvalError "Type error in addition"))
-  | Parser.Sub (a, b) ->
+       | _ -> failwith "Type error in addition")
+  | Sub (a, b) ->
       (match eval env a, eval env b with
        | IntVal x, IntVal y -> IntVal (x - y)
-       | _ -> raise (EvalError "Type error in subtraction"))
-  | Parser.Var x ->
-      (try List.assoc x env with Not_found -> raise (EvalError ("Undefined variable: " ^ x)))
-  | Parser.Lam (x, body) -> FunVal ([x], body, env)
-  | Parser.App (f, arg) ->
-      let fv = eval env f in
-      let av = eval env arg in
-      (match fv with
-       | FunVal ([x], body, closure) -> eval ((x, av) :: closure) body
-       | FunVal (args, body, closure) ->
-           (match args with
-            | x :: xs ->
-                let new_env = (x, av) :: closure in
-                if xs = [] then eval new_env body
-                else FunVal (xs, body, new_env)
-            | [] -> raise (EvalError "Function with no arguments"))
-       | _ -> raise (EvalError "Not a function"))
-  | Parser.Let (name, _, value) ->
+       | _ -> failwith "Type error in subtraction")
+  | Var x ->
+      (try List.assoc x env with Not_found -> failwith ("Unbound variable: " ^ x))
+  | Lam (x, body) -> FunVal ([x], body, env)
+  | App (f, a) ->
+      (match eval env f with
+       | FunVal (params, body, closure_env) when List.length params = 1 ->
+           (* Single parameter case *)
+           let arg_val = eval env a in
+           let new_env = (List.hd params, arg_val) :: closure_env in
+           eval new_env body
+       | FunVal (param :: rest_params, body, closure_env) ->
+           (* Multiple parameter case - partial application *)
+           let arg_val = eval env a in
+           let new_env = (param, arg_val) :: closure_env in
+           if rest_params = [] then
+             eval new_env body
+           else
+             FunVal (rest_params, body, new_env)
+       | _ -> failwith "Attempt to call a non-function")
+  | Let (name, _, value) ->
       let v = eval env value in
       v
-  | Parser.FunDef (name, args, body) ->
+  | FunDef (name, args, body) ->
       FunVal (args, body, env)
+  | Seq (e1, e2) ->
+      ignore (eval env e1);
+      eval env e2
   | Print e ->
       let v = eval env e in
       (match v with
@@ -49,15 +56,24 @@ let rec eval (env : env) (e : Parser.expr) : value =
 
 let rec eval_toplevel env = function
   | [] -> ()
-  | Parser.Let (name, _, value) :: rest ->
+  | Let (name, _, value) :: rest ->
       let v = eval env value in
+      Printf.printf "Let %s = %s\n"
+        name
+        (match v with
+         | IntVal n -> string_of_int n
+         | StrVal s -> s
+         | FunVal _ -> "<function>");
       eval_toplevel ((name, v) :: env) rest
-  | Parser.FunDef (name, args, body) :: rest ->
+  | FunDef (name, args, body) :: rest ->
       let v = FunVal (args, body, env) in
+      Printf.printf "Fun %s = <function>\n" name;
       eval_toplevel ((name, v) :: env) rest
   | expr :: rest ->
-      (try
-         let _ = eval env expr in
-         eval_toplevel env rest
-       with
-       | EvalError msg -> Printf.printf "Evaluation error: %s\n" msg)
+      let v = eval env expr in
+      Printf.printf "Result: %s\n"
+        (match v with
+         | IntVal n -> string_of_int n
+         | StrVal s -> s
+         | FunVal _ -> "<function>");
+      eval_toplevel env rest
