@@ -11,3 +11,6 @@
 (add (sub 5 2) 3)
 (add 2 (sub 5 3))
 (sub (add 2 3) 1)
+
+print v1
+print 42

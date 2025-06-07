@@ -26,11 +26,13 @@ type expr =
   | Int of int
   | Str of string
   | Add of expr * expr
+  | Sub of expr * expr
   | Var of string
   | Lam of string * expr
   | App of expr * expr
   | Let of string * typ * expr  (* variable name, type, value *)
   | FunDef of string * string list * expr
+  | Print of expr
 
 let tokenize s =
   let is_letter c =
@@ -110,15 +112,26 @@ and parse_fun_def tokens =
   | _ -> parse_var_def tokens
 
 and parse_var_def tokens =
+  let parse_typed_var name value rest =
+    match String.split_on_char '_' name with
+    | [t; v] ->
+        let typ = match t with
+          | "i" -> TInt
+          | "s" -> TString
+          | _ -> TUnknown
+        in
+        (Let (v, typ, value), rest)
+    | _ -> (Let (name, TUnknown, value), rest)
+  in
   match tokens with
   | At :: Ident name :: Number n :: rest ->
-      (Let (name, TInt, Int n), rest)
+      parse_typed_var name (Int n) rest
   | At :: Ident name :: String s :: rest ->
-      (Let (name, TString, Str s), rest)
+      parse_typed_var name (Str s) rest
   | At :: Ident name :: rest ->
       (match rest with
-       | Number n :: rest' -> (Let (name, TInt, Int n), rest')
-       | String s :: rest' -> (Let (name, TString, Str s), rest')
+       | Number n :: rest' -> parse_typed_var name (Int n) rest'
+       | String s :: rest' -> parse_typed_var name (Str s) rest'
        | _ -> raise (ParseError ("Expected value after variable name", 1, 1)))
   | _ -> parse_add tokens
 
@@ -130,8 +143,7 @@ and parse_add tokens =
       (Add (lhs, rhs), rest'')
   | Minus :: rest' ->
       let rhs, rest'' = parse_add rest' in
-      (* You can add a Sub constructor if needed; for now, treat as Add with negative *)
-      (Add (lhs, rhs), rest'')  (* Replace with Sub if you add it *)
+      (Sub (lhs, rhs), rest'')
   | _ -> (lhs, rest)
 
 and parse_app tokens =
@@ -156,6 +168,9 @@ and parse_app tokens =
 and parse_atom tokens =
   match tokens with
   | Number n :: rest -> (Int n, rest)
+  | Ident "print" :: rest ->
+      let arg, rest' = parse_expr rest in
+      (Print arg, rest')
   | Ident x :: rest -> (Var x, rest)
   | LParen :: rest ->
       let expr, rest' = parse_expr rest in
@@ -168,6 +183,7 @@ and parse_atom tokens =
 let rec string_of_expr = function
   | Int n -> string_of_int n
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
+  | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
   | Var x -> x
   | Lam (x, body) -> "|>" ^ x ^ ". " ^ string_of_expr body
   | App (f, a) -> "(" ^ string_of_expr f ^ " " ^ string_of_expr a ^ ")"
@@ -178,6 +194,7 @@ let rec string_of_expr = function
       " = " ^ string_of_expr value
   | FunDef (name, args, body) ->
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
+  | Print e -> "print " ^ string_of_expr e
 
 let string_of_exprs exprs =
   String.concat "\n" (List.map string_of_expr exprs)
