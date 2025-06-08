@@ -74,9 +74,10 @@ let instantiate t =
 let rec infer env = function
   | Int _ -> ([], TInt)
   | Lng _ -> ([], TLong)
+  | Float _ -> ([], TLong)
   | Bool _ -> ([], TBool)
   | Str _ -> ([], TString)
-  | Add (a, b) | Sub (a, b) ->
+  | Add (a, b) | Sub (a, b) | Mul(a, b) | Div (a, b)->
       let s1, t1 = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
       let t1 = apply s2 t1 in

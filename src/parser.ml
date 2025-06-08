@@ -6,10 +6,13 @@ exception ParseError of string * int * int
 type token =
   | Integer of int
   | Long of int64
+  | Float of float
   | String of string
   | Bool of bool
   | Plus
   | Minus
+  | Multiply
+  | Divide
   | Lambda
   | Ident of string
   | At
@@ -58,8 +61,10 @@ let tokenize s =
       aux (i+1) line (col+1) ((Plus, line, col) :: acc)
     else if s.[i] = '-' then
       aux (i+1) line (col+1) ((Minus, line, col) :: acc)
-    else if s.[i] = '.' then
-      aux (i+1) line (col+1) ((Dot, line, col) :: acc)
+    else if s.[i] = '*' then
+      aux (i+1) line (col+1) ((Multiply, line, col) :: acc)
+    else if s.[i] = '/' then
+      aux (i+1) line (col+1) ((Divide, line, col) :: acc)
     else if s.[i] = '@' then
       aux (i+1) line (col+1) ((At, line, col) :: acc)
     else if s.[i] = '_' then
@@ -78,16 +83,36 @@ let tokenize s =
     else if is_digit s.[i] then
       let j = ref i in
       while !j < String.length s && is_digit s.[!j] do incr j done;
-      let is_long =
-        !j < String.length s && (s.[!j] = 'l' || s.[!j] = 'L')
-      in
-      if is_long then (
+
+      if !j < String.length s && s.[!j] = '.' then (
+        incr j;
+        if !j < String.length s && is_digit s.[!j] then (
+          while !j < String.length s && is_digit s.[!j] do incr j done;
+          let f = float_of_string (String.sub s i (!j-i)) in
+          aux !j line (col + (!j - i)) ((Float f, line, col) :: acc)
+        ) else
+          raise (ParseError ("Expected digit after decimal point", line, col))
+      )
+      else if !j < String.length s && (s.[!j] = 'l' || s.[!j] = 'L') then
+        (* This is a long integer like 123L *)
         let n = Int64.of_string (String.sub s i (!j-i)) in
         aux (!j+1) line (col + (!j - i + 1)) ((Long n, line, col) :: acc)
-      ) else (
+      else if !j < String.length s && (s.[!j] = 'f' || s.[!j] = 'F') then
+        (* This is a float literal like 123f *)
+        let f = float_of_string (String.sub s i (!j-i)) in
+        aux (!j+1) line (col + (!j - i + 1)) ((Float f, line, col) :: acc)
+      else
+        (* This is a regular integer *)
         let n = int_of_string (String.sub s i (!j-i)) in
         aux !j line (col + (!j - i)) ((Integer n, line, col) :: acc)
-      )
+    else if s.[i] = '.' && (i + 1) < String.length s && is_digit s.[i+1] then
+      (* This is a float starting with a dot like .123 *)
+      let j = ref (i+1) in
+      while !j < String.length s && is_digit s.[!j] do incr j done;
+      let f = float_of_string (String.sub s i (!j-i)) in
+      aux !j line (col + (!j - i)) ((Float f, line, col) :: acc)
+    else if s.[i] = '.' then
+      aux (i+1) line (col+1) ((Dot, line, col) :: acc)
     else if s.[i] = '"' then
       let j = ref (i+1) in
       while !j < String.length s && s.[!j] <> '"' do incr j done;
@@ -154,6 +179,7 @@ and parse_var_def tokens =
           | "i" -> TInt
           | "l" -> TLong
           | "s" -> TString
+          | "f" -> TFloat
           | _ -> TUnknown
         in
         (Let (v, typ, value), rest)
@@ -164,6 +190,8 @@ and parse_var_def tokens =
       parse_typed_var name (Int n) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Long n, _, _) :: rest ->
       parse_typed_var name (Lng n) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (Float f, _, _) :: rest ->
+      parse_typed_var name (Float f) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Bool true, _, _) :: rest ->
       parse_typed_var name (Lam ("x", Lam ("y", Var "x"))) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Bool false, _, _) :: rest ->
@@ -187,6 +215,12 @@ and parse_add tokens =
   | (Minus, _, _) :: rest' ->
       let rhs, rest'' = parse_add rest' in
       (Sub (lhs, rhs), rest'')
+  | (Multiply, _, _) :: rest' ->
+      let rhs, rest'' = parse_add rest' in
+      (Mul (lhs, rhs), rest'')
+  | (Divide, _, _) :: rest' ->
+      let rhs, rest'' = parse_add rest' in
+      (Div (lhs, rhs), rest'')
   | _ -> (lhs, rest)
 
 and parse_app tokens =
@@ -208,6 +242,7 @@ and parse_atom tokens =
   match tokens with
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
+  | (Float f, _, _) :: rest -> (Float f, rest)
   | (Bool true, _, _) :: rest -> (Lam ("x", Lam ("y", Var "x")), rest)
   | (Bool false, _, _) :: rest -> (Lam ("x", Lam ("y", Var "y")), rest)
   | (Ident "print", _, _) :: rest ->
@@ -267,6 +302,7 @@ let string_of_typ t =
   let rec aux = function
     | TInt -> "Int"
     | TLong -> "Long"
+    | TFloat -> "Float"
     | TBool -> "Bool"
     | TString -> "String"
     | TVar v -> "'" ^ v

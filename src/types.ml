@@ -1,6 +1,7 @@
 type typ =
   | TInt
   | TLong
+  | TFloat
   | TString
   | TBool
   | TVar of string
