@@ -1,7 +1,8 @@
 exception ParseError of string * int * int  (* message, line, col *)
 
 type token =
-  | Number of int
+  | Integer of int
+  | Long of int64
   | String of string
   | Plus
   | Minus
@@ -19,11 +20,13 @@ type token =
 
 type typ =
   | TInt
+  | TLong
   | TString
   | TUnknown
 
 type expr =
   | Int of int
+  | Lng of int64
   | Str of string
   | Add of expr * expr
   | Sub of expr * expr
@@ -82,8 +85,16 @@ let tokenize s =
     else if is_digit s.[i] then
       let j = ref i in
       while !j < String.length s && is_digit s.[!j] do incr j done;
-      let n = int_of_string (String.sub s i (!j-i)) in
-      aux !j line (col + (!j - i)) (Number n :: acc)
+      let is_long =
+        !j < String.length s && (s.[!j] = 'l' || s.[!j] = 'L')
+      in
+      if is_long then (
+        let n = Int64.of_string (String.sub s i (!j-i)) in
+        aux (!j+1) line (col + (!j - i + 1)) (Long n :: acc)
+      ) else (
+        let n = int_of_string (String.sub s i (!j-i)) in
+        aux !j line (col + (!j - i)) (Integer n :: acc)
+      )
     else if s.[i] = '"' then
       let j = ref (i+1) in
       while !j < String.length s && s.[!j] <> '"' do incr j done;
@@ -142,6 +153,7 @@ and parse_var_def tokens =
     | [t; v] ->
         let typ = match t with
           | "i" -> TInt
+          | "l" -> TLong
           | "s" -> TString
           | _ -> TUnknown
         in
@@ -149,13 +161,15 @@ and parse_var_def tokens =
     | _ -> (Let (name, TUnknown, value), rest)
   in
   match tokens with
-  | At :: Ident name :: Number n :: rest ->
+  | At :: Ident name :: Integer n :: rest ->
       parse_typed_var name (Int n) rest
+  | At :: Ident name :: Long n :: rest ->
+      parse_typed_var name (Lng n) rest
   | At :: Ident name :: String s :: rest ->
       parse_typed_var name (Str s) rest
   | At :: Ident name :: rest ->
       (match rest with
-       | Number n :: rest' -> parse_typed_var name (Int n) rest'
+       | Integer n :: rest' -> parse_typed_var name (Int n) rest'
        | String s :: rest' -> parse_typed_var name (Str s) rest'
        | _ -> raise (ParseError ("Expected value after variable name", 1, 1)))
   | _ -> parse_add tokens
@@ -192,7 +206,7 @@ and parse_app tokens =
 
 and parse_atom tokens =
   match tokens with
-  | Number n :: rest -> (Int n, rest)
+  | Integer n :: rest -> (Int n, rest)
   | Ident "print" :: rest ->
       let arg, rest' = parse_expr rest in
       (Print arg, rest')
@@ -207,6 +221,7 @@ and parse_atom tokens =
 
 let rec string_of_expr = function
   | Int n -> string_of_int n
+  | Lng n -> Int64.to_string n
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
   | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
   | Var x -> x
@@ -215,7 +230,7 @@ let rec string_of_expr = function
   | Str s -> "\"" ^ s ^ "\""
   | Let (name, typ, value) ->
       "@" ^ name ^ " : " ^
-      (match typ with TInt -> "Int" | TString -> "String" | TUnknown -> "?") ^
+      (match typ with TInt -> "Int" | TString -> "String" | TLong -> "Long" | TUnknown -> "?") ^
       " = " ^ string_of_expr value
   | FunDef (name, args, body) ->
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body

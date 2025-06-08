@@ -4,12 +4,14 @@ exception EvalError of string
 
 type value =
   | IntVal of int
+  | LngVal of int64
   | StrVal of string
   | FunVal of string list * expr * env
 and env = (string * value) list
 
 let rec eval env = function
   | Int n -> IntVal n
+  | Lng n -> LngVal n
   | Str s -> StrVal s
   | Add (a, b) ->
       (match eval env a, eval env b with
@@ -48,6 +50,7 @@ let rec eval env = function
       let v = eval env e in
       (match v with
        | IntVal n -> print_endline (string_of_int n)
+       | LngVal n -> print_endline (Int64.to_string n)
        | StrVal s -> print_endline s
        | FunVal _ -> print_endline "<function>");
       v
@@ -60,6 +63,7 @@ let rec eval_toplevel env = function
         name
         (match v with
          | IntVal n -> string_of_int n
+         | LngVal n -> Int64.to_string n
          | StrVal s -> s
          | FunVal _ -> "<function>");
       eval_toplevel ((name, v) :: env) rest
