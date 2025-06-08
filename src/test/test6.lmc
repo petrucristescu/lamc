@@ -1,0 +1,9 @@
+@b_v1 true
+@b_v2 false
+
+~(
+    print (v1  "yes" "no")
+    print (v2  "yes" "no")
+    print (true  "yes" "no")
+    print (false  "yes" "no")
+)

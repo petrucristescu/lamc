@@ -164,8 +164,10 @@ and parse_var_def tokens =
       parse_typed_var name (Int n) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Long n, _, _) :: rest ->
       parse_typed_var name (Lng n) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Bool b, _, _) :: rest ->
-      parse_typed_var name (Bool b) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (Bool true, _, _) :: rest ->
+      parse_typed_var name (Lam ("x", Lam ("y", Var "x"))) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (Bool false, _, _) :: rest ->
+      parse_typed_var name (Lam ("x", Lam ("y", Var "y"))) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
       parse_typed_var name (Str s) rest line col
   | (At, line, col) :: (Ident name, _, _) :: rest ->
@@ -206,7 +208,8 @@ and parse_atom tokens =
   match tokens with
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
-  | (Bool b, _, _) :: rest -> (Bool b, rest)
+  | (Bool true, _, _) :: rest -> (Lam ("x", Lam ("y", Var "x")), rest)
+  | (Bool false, _, _) :: rest -> (Lam ("x", Lam ("y", Var "y")), rest)
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr rest in
       (Print arg, rest')
