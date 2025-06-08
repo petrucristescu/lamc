@@ -211,18 +211,32 @@ and parse_atom tokens =
   | (Bool true, _, _) :: rest -> (Lam ("x", Lam ("y", Var "x")), rest)
   | (Bool false, _, _) :: rest -> (Lam ("x", Lam ("y", Var "y")), rest)
   | (Ident "print", _, _) :: rest ->
-      let arg, rest' = parse_expr rest in
+      let arg, rest' = parse_expr (skip_newlines rest) in
       (Print arg, rest')
   | (Ident "eq", _, _) :: rest ->
-      let a, rest' = parse_atom rest in
-      let b, rest'' = parse_atom rest' in
-      (Eq (a, b), rest'')
+      let a, rest' = parse_atom (skip_newlines rest) in
+      let b, rest'' = parse_atom (skip_newlines rest') in
+      let rest''' = skip_newlines rest'' in
+      (match rest''' with
+       | (String s, _, _) :: rest'''' ->
+           (* Third argument is a string literal *)
+           let f, rest''''' = parse_atom (skip_newlines rest'''') in
+           (App (App (Eq (a, b), Str s), f), rest''''')
+       | (LParen, _, _) :: _ ->
+           (* Third argument is a parenthesized expression *)
+           let t, rest'''' = parse_atom rest''' in
+           let f, rest''''' = parse_atom (skip_newlines rest'''') in
+           (App (App (Eq (a, b), t), f), rest''''')
+       | _ -> (Eq (a, b), rest'''))
   | (Ident x, _, _) :: rest -> (Var x, rest)
   | (LParen, _, _) :: rest ->
+      let rest = skip_newlines rest in
       let expr, rest' = parse_expr rest in
+      let rest' = skip_newlines rest' in
       (match rest' with
        | (RParen, _, _) :: rest'' -> (expr, rest'')
-       | (tok, line, col) :: _ -> raise (ParseError ("Expected closing parenthesis", line, col))
+       | (tok, line, col) :: _ ->
+           raise (ParseError ("Expected closing parenthesis", line, col))
        | [] -> raise (ParseError ("Expected closing parenthesis", 1, 1)))
   | (String s, _, _) :: rest -> (Str s, rest)
   | (At, _, _) :: _ -> parse_var_def tokens
