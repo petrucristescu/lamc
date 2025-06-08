@@ -1,6 +1,7 @@
 @i_v1 4
 @s_v2 "string"
 @l_v3 4l
+@l_v4 7l
 
 ~add x,y x + y
 ~sub x,y x - y
@@ -20,4 +21,6 @@
     print "Hello, world!"
     print (add 2 3)
     print_both (add 2 3) (sub 5 3)
+    print (add 6l 3l)
+    print (add v3 v4)
 )

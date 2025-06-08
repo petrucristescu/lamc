@@ -1,4 +1,7 @@
-exception ParseError of string * int * int  (* message, line, col *)
+open Types
+open Ast
+
+exception ParseError of string * int * int
 
 type token =
   | Integer of int
@@ -16,27 +19,10 @@ type token =
   | LParen
   | RParen
   | Comma
+  | Newline
   | Eof
 
-type typ =
-  | TInt
-  | TLong
-  | TString
-  | TUnknown
-
-type expr =
-  | Int of int
-  | Lng of int64
-  | Str of string
-  | Add of expr * expr
-  | Sub of expr * expr
-  | Var of string
-  | Lam of string * expr
-  | App of expr * expr
-  | Let of string * typ * expr  (* variable name, type, value *)
-  | FunDef of string * string list * expr
-  | Seq of expr * expr
-  | Print of expr
+type pos_token = token * int * int
 
 let tokenize s =
   let is_letter c =
@@ -52,36 +38,38 @@ let tokenize s =
     c = ' ' || c = '\t' || c = '\r'
   in
   let rec aux i line col acc =
-    if i >= String.length s then List.rev (Eof :: acc)
+    if i >= String.length s then List.rev ((Eof, line, col) :: acc)
+    else if s.[i] = '\n' then
+      aux (i+1) (line+1) 1 ((Newline, line, col) :: acc)
     else if s.[i] = '(' then
-      aux (i+1) line (col+1) (LParen :: acc)
+      aux (i+1) line (col+1) ((LParen, line, col) :: acc)
     else if s.[i] = ')' then
-      aux (i+1) line (col+1) (RParen :: acc)
+      aux (i+1) line (col+1) ((RParen, line, col) :: acc)
     else if s.[i] = '~' then
-      aux (i+1) line (col+1) (Tilde :: acc)
+      aux (i+1) line (col+1) ((Tilde, line, col) :: acc)
     else if s.[i] = ',' then
-      aux (i+1) line (col+1) (Comma :: acc)
+      aux (i+1) line (col+1) ((Comma, line, col) :: acc)
     else if i + 1 < String.length s && s.[i] = '|' && s.[i+1] = '>' then
-      aux (i+2) line (col+2) (Lambda :: acc)
+      aux (i+2) line (col+2) ((Lambda, line, col) :: acc)
     else if is_whitespace s.[i] then
       aux (i+1) line (col+1) acc
-    else if s.[i] = '\n' then
-      aux (i+1) (line+1) 1 acc
     else if s.[i] = '+' then
-      aux (i+1) line (col+1) (Plus :: acc)
+      aux (i+1) line (col+1) ((Plus, line, col) :: acc)
     else if s.[i] = '-' then
-      aux (i+1) line (col+1) (Minus :: acc)
+      aux (i+1) line (col+1) ((Minus, line, col) :: acc)
     else if s.[i] = '.' then
-      aux (i+1) line (col+1) (Dot :: acc)
+      aux (i+1) line (col+1) ((Dot, line, col) :: acc)
     else if s.[i] = '@' then
-      aux (i+1) line (col+1) (At :: acc)
+      aux (i+1) line (col+1) ((At, line, col) :: acc)
     else if s.[i] = '_' then
-      aux (i+1) line (col+1) (Underscore :: acc)
+      aux (i+1) line (col+1) ((Underscore, line, col) :: acc)
     else if is_letter s.[i] then
       let j = ref (i+1) in
-      while !j < String.length s && is_ident_char s.[!j] do incr j done;
+      while !j < String.length s && is_ident_char s.[!j] do
+        incr j
+      done;
       let name = String.sub s i (!j-i) in
-      aux !j line (col + (!j - i)) (Ident name :: acc)
+      aux !j line (col + (!j - i)) ((Ident name, line, col) :: acc)
     else if is_digit s.[i] then
       let j = ref i in
       while !j < String.length s && is_digit s.[!j] do incr j done;
@@ -90,10 +78,10 @@ let tokenize s =
       in
       if is_long then (
         let n = Int64.of_string (String.sub s i (!j-i)) in
-        aux (!j+1) line (col + (!j - i + 1)) (Long n :: acc)
+        aux (!j+1) line (col + (!j - i + 1)) ((Long n, line, col) :: acc)
       ) else (
         let n = int_of_string (String.sub s i (!j-i)) in
-        aux !j line (col + (!j - i)) (Integer n :: acc)
+        aux !j line (col + (!j - i)) ((Integer n, line, col) :: acc)
       )
     else if s.[i] = '"' then
       let j = ref (i+1) in
@@ -102,53 +90,59 @@ let tokenize s =
         raise (ParseError ("Unterminated string literal", line, col))
       else
         let str = String.sub s (i+1) (!j - i - 1) in
-        aux (!j+1) line (col + (!j - i + 1)) (String str :: acc)
+        aux (!j+1) line (col + (!j - i + 1)) ((String str, line, col) :: acc)
     else
       raise (ParseError ("Unknown char: " ^ String.make 1 s.[i], line, col))
-  in aux 0 1 1 []
+  in
+  aux 0 1 1 []
 
 let rec parse_expr tokens = parse_fun_def tokens
 
+and skip_newlines = function
+  | (Newline, _, _) :: rest -> skip_newlines rest
+  | tokens -> tokens
+
 and parse_seq tokens =
   let rec aux toks acc =
+    let toks = skip_newlines toks in
     match toks with
-    | RParen :: rest -> (List.rev acc, rest)
+    | (RParen, _, _) :: rest -> (List.rev acc, rest)
+    | [] | (Eof, _, _) :: _ -> (List.rev acc, toks)
     | _ ->
         let expr, toks' = parse_expr toks in
         aux toks' (expr :: acc)
   in
   let exprs, rest = aux tokens [] in
   match exprs with
-  | [] -> (Int 0, rest)  (* or a Unit node if you add one *)
+  | [] -> (Int 0, rest)
   | [e] -> (e, rest)
   | e1 :: es -> (List.fold_left (fun acc e -> Seq (acc, e)) e1 es, rest)
 
 and parse_fun_def tokens =
   match tokens with
-  | Tilde :: LParen :: rest ->
-      (* Anonymous main function case *)
+  | (Tilde, _, _) :: (LParen, _, _) :: rest ->
       let body, rest' = parse_seq rest in
       (FunDef ("main", [], body), rest')
-  | Tilde :: Ident name :: rest ->
+  | (Tilde, _, _) :: (Ident name, _, _) :: rest ->
       let rec parse_args toks acc =
         match toks with
-        | LParen :: _ -> (List.rev acc, toks)  (* No arguments, next is body *)
-        | Ident arg :: Comma :: rest' -> parse_args rest' (arg :: acc)
-        | Ident arg :: rest' -> (List.rev (arg :: acc), rest')
-        | _ -> raise (ParseError ("Expected argument name", 1, 1))
+        | (LParen, _, _) :: _ -> (List.rev acc, toks)
+        | (Ident arg, _, _) :: (Comma, _, _) :: rest' -> parse_args rest' (arg :: acc)
+        | (Ident arg, _, _) :: rest' -> (List.rev (arg :: acc), rest')
+        | (tok, line, col) :: _ -> raise (ParseError ("Expected argument name", line, col))
+        | [] -> raise (ParseError ("Expected argument name", 1, 1))
       in
       let args, rest' = parse_args rest [] in
-      (match rest' with
-       | LParen :: rest'' ->
-           let body, rest''' = parse_seq rest'' in
-           (FunDef (name, args, body), rest''')
-       | _ ->
-           let body, rest'' = parse_add rest' in
-           (FunDef (name, args, body), rest''))
+      let body, rest'' =
+        match rest' with
+        | (LParen, _, _) :: rest'' -> parse_seq rest''
+        | _ -> parse_add rest'
+      in
+      (FunDef (name, args, body), rest'')
   | _ -> parse_var_def tokens
 
 and parse_var_def tokens =
-  let parse_typed_var name value rest =
+  let parse_typed_var name value rest line col =
     match String.split_on_char '_' name with
     | [t; v] ->
         let typ = match t with
@@ -161,89 +155,69 @@ and parse_var_def tokens =
     | _ -> (Let (name, TUnknown, value), rest)
   in
   match tokens with
-  | At :: Ident name :: Integer n :: rest ->
-      parse_typed_var name (Int n) rest
-  | At :: Ident name :: Long n :: rest ->
-      parse_typed_var name (Lng n) rest
-  | At :: Ident name :: String s :: rest ->
-      parse_typed_var name (Str s) rest
-  | At :: Ident name :: rest ->
+  | (At, line, col) :: (Ident name, _, _) :: (Integer n, _, _) :: rest ->
+      parse_typed_var name (Int n) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (Long n, _, _) :: rest ->
+      parse_typed_var name (Lng n) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
+      parse_typed_var name (Str s) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: rest ->
       (match rest with
-       | Integer n :: rest' -> parse_typed_var name (Int n) rest'
-       | String s :: rest' -> parse_typed_var name (Str s) rest'
-       | _ -> raise (ParseError ("Expected value after variable name", 1, 1)))
+       | (Integer n, _, _) :: rest' -> parse_typed_var name (Int n) rest' line col
+       | (String s, _, _) :: rest' -> parse_typed_var name (Str s) rest' line col
+       | (tok, l, c) :: _ -> raise (ParseError ("Expected value after variable name", l, c))
+       | [] -> raise (ParseError ("Expected value after variable name", line, col)))
   | _ -> parse_add tokens
 
 and parse_add tokens =
   let lhs, rest = parse_app tokens in
   match rest with
-  | Plus :: rest' ->
+  | (Plus, _, _) :: rest' ->
       let rhs, rest'' = parse_add rest' in
       (Add (lhs, rhs), rest'')
-  | Minus :: rest' ->
+  | (Minus, _, _) :: rest' ->
       let rhs, rest'' = parse_add rest' in
       (Sub (lhs, rhs), rest'')
   | _ -> (lhs, rest)
 
 and parse_app tokens =
-  match tokens with
-  | LParen :: Ident f :: rest ->
-      let rec parse_args toks acc =
-        match toks with
-        | RParen :: rest' -> (List.rev acc, rest')
-        | _ ->
-            let arg, toks' = parse_expr toks in
-            parse_args toks' (arg :: acc)
-      in
-      let args, rest' = parse_args rest [] in
-      let app = List.fold_left (fun acc arg -> App (acc, arg)) (Var f) args in
-      (app, rest')
-  | Lambda :: Ident x :: Dot :: rest ->
-      let body, rest' = parse_expr rest in
-      (Lam (x, body), rest')
-  | _ ->
-      parse_atom tokens
+  let rec aux acc toks =
+    match toks with
+    | (Integer _, _, _) :: _
+    | (Long _, _, _) :: _
+    | (Ident _, _, _) :: _
+    | (LParen, _, _) :: _
+    | (String _, _, _) :: _ ->
+        let arg, rest = parse_atom toks in
+        aux (App (acc, arg)) rest
+    | _ -> (acc, toks)
+  in
+  let atom, rest = parse_atom tokens in
+  aux atom rest
 
 and parse_atom tokens =
   match tokens with
-  | Integer n :: rest -> (Int n, rest)
-  | Ident "print" :: rest ->
+  | (Integer n, _, _) :: rest -> (Int n, rest)
+  | (Long n, _, _) :: rest -> (Lng n, rest)
+  | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr rest in
       (Print arg, rest')
-  | Ident x :: rest -> (Var x, rest)
-  | LParen :: rest ->
+  | (Ident x, _, _) :: rest -> (Var x, rest)
+  | (LParen, _, _) :: rest ->
       let expr, rest' = parse_expr rest in
       (match rest' with
-       | RParen :: rest'' -> (expr, rest'')
-       | _ -> raise (ParseError ("Expected closing parenthesis", 1, 1)))
-  | String s :: rest -> (Str s, rest)
-  | _ -> raise (ParseError ("Invalid expression", 1, 1))
-
-let rec string_of_expr = function
-  | Int n -> string_of_int n
-  | Lng n -> Int64.to_string n
-  | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
-  | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
-  | Var x -> x
-  | Lam (x, body) -> "|>" ^ x ^ ". " ^ string_of_expr body
-  | App (f, a) -> "(" ^ string_of_expr f ^ " " ^ string_of_expr a ^ ")"
-  | Str s -> "\"" ^ s ^ "\""
-  | Let (name, typ, value) ->
-      "@" ^ name ^ " : " ^
-      (match typ with TInt -> "Int" | TString -> "String" | TLong -> "Long" | TUnknown -> "?") ^
-      " = " ^ string_of_expr value
-  | FunDef (name, args, body) ->
-      "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
-  | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
-  | Print e -> "print " ^ string_of_expr e
-
-let string_of_exprs exprs =
-  String.concat "\n" (List.map string_of_expr exprs)
+       | (RParen, _, _) :: rest'' -> (expr, rest'')
+       | (tok, line, col) :: _ -> raise (ParseError ("Expected closing parenthesis", line, col))
+       | [] -> raise (ParseError ("Expected closing parenthesis", 1, 1)))
+  | (String s, _, _) :: rest -> (Str s, rest)
+  | (At, _, _) :: _ -> parse_var_def tokens
+  | (tok, line, col) :: _ -> raise (ParseError ("Invalid expression", line, col))
+  | [] -> raise (ParseError ("Invalid expression", 1, 1))
 
 let rec parse_all tokens acc =
+  let tokens = skip_newlines tokens in
   match tokens with
-  | [] | [Eof] -> List.rev acc
-  | Eof :: _ -> List.rev acc
+  | [] | (Eof, _, _) :: _ -> List.rev acc
   | _ ->
       let expr, rest = parse_expr tokens in
       parse_all rest (expr :: acc)
@@ -258,3 +232,37 @@ let parse input =
   try parse_all tokens []
   with ParseError (msg, line, col) ->
     raise (ParseError (msg, line, col))
+
+(* --- Type inference integration --- *)
+let string_of_typ t =
+  let rec aux = function
+    | TInt -> "Int"
+    | TLong -> "Long"
+    | TString -> "String"
+    | TVar v -> "'" ^ v
+    | TFun (a, b) -> "(" ^ aux a ^ " -> " ^ aux b ^ ")"
+    | TUnknown -> "?"
+  in aux t
+
+let parse_and_infer ?(show_types=true) input =
+  let exprs = parse input in
+  let env = Types.StringMap.empty in
+  let rec infer_toplevel env = function
+    | [] -> ()
+    | expr :: rest ->
+        try
+          let _, typ = Infer.infer env expr in
+          if show_types then
+            Printf.printf "Expr: %s\nType: %s\n\n" (Ast.string_of_expr expr) (string_of_typ typ);
+          let env' =
+            match expr with
+            | Let (name, _, _) -> Types.StringMap.add name typ env
+            | FunDef (name, _, _) -> Types.StringMap.add name typ env
+            | _ -> env
+          in
+          infer_toplevel env' rest
+        with
+        | Infer.TypeError msg -> Printf.printf "Type error: %s\n" msg; infer_toplevel env rest
+  in
+  infer_toplevel env exprs;
+  exprs

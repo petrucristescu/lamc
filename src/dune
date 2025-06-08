@@ -1,4 +1,4 @@
 (executable
  (name lmc)
- (modules lmc parser eval ast)
+ (modules lmc parser eval ast types infer)
  (flags (:standard -w -27)))
