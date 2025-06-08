@@ -213,6 +213,10 @@ and parse_atom tokens =
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr rest in
       (Print arg, rest')
+  | (Ident "eq", _, _) :: rest ->
+      let a, rest' = parse_atom rest in
+      let b, rest'' = parse_atom rest' in
+      (Eq (a, b), rest'')
   | (Ident x, _, _) :: rest -> (Var x, rest)
   | (LParen, _, _) :: rest ->
       let expr, rest' = parse_expr rest in

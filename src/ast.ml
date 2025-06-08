@@ -5,6 +5,7 @@ type expr =
   | Str of string
   | Add of expr * expr
   | Sub of expr * expr
+  | Eq of expr * expr
   | Var of string
   | Lam of string * expr
   | App of expr * expr
@@ -26,6 +27,7 @@ let rec string_of_expr = function
   | Int n -> string_of_int n
   | Lng n -> Int64.to_string n
   | Bool b -> string_of_bool b
+  | Eq (a, b) -> "(" ^ string_of_expr a ^ " == " ^ string_of_expr b ^ ")"
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
   | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
   | Var x -> x

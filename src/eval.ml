@@ -33,6 +33,19 @@ let rec eval (env : env) (e : expr) : value =
       | VInt x, VLong y -> VLong (Int64.sub (Int64.of_int x) y)
       | VLong x, VInt y -> VLong (Int64.sub x (Int64.of_int y))
       | _ -> raise (RuntimeError "Type error in sub"))
+  | Eq (a, b) ->
+      let va = eval env a in
+      let vb = eval env b in
+      let result =
+        match va, vb with
+        | VInt x, VInt y -> x = y
+        | VLong x, VLong y -> x = y
+        | VString x, VString y -> x = y
+        | _ -> false
+      in
+      let true_branch = App (Var "t", Int 0) in
+      let false_branch = App (Var "f", Int 0) in
+      VFun (["t"; "f"], (if result then true_branch else false_branch), env)
   | Var x ->
       (try StringMap.find x env
        with Not_found -> raise (RuntimeError ("Unbound variable: " ^ x)))

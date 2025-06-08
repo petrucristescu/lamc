@@ -85,6 +85,11 @@ let rec infer env = function
       let t = apply s3 t1 in
       let s4 = unify t (TInt) in
       (compose s4 (compose s3 (compose s2 s1)), TInt)
+  | Eq (a, b) ->
+      let s1, t1 = infer env a in
+      let s2, t2 = infer (StringMap.map (apply s1) env) b in
+      let s3 = unify t1 t2 in
+      (compose s3 (compose s2 s1), TFun (TVar "a", TFun (TVar "a", TVar "a")))
   | Var x ->
       (match StringMap.find_opt x env with
       | Some t -> ([], instantiate t)
