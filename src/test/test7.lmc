@@ -1,11 +1,12 @@
-~foo x (print "foo called")
-~bar x (print "bar called")
+~foo (
+    print "foo called"
+)
 
-~choose_fn x,y (
-    ((eq x y) foo bar)
+~bar (
+    print "bar called"
 )
 
 ~(
-    choose_fn 10 10
-    choose_fn 10 20
+    print foo
+    print bar
 )

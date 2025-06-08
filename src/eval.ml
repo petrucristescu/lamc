@@ -41,11 +41,12 @@ let rec eval (env : env) (e : expr) : value =
         | VInt x, VInt y -> x = y
         | VLong x, VLong y -> x = y
         | VString x, VString y -> x = y
+        | VBool x, VBool y -> x = y
         | _ -> false
       in
-      let true_branch = App (Var "t", Int 0) in
-      let false_branch = App (Var "f", Int 0) in
-      VFun (["t"; "f"], (if result then true_branch else false_branch), env)
+      VFun (["t"; "f"],
+            (if result then Var "t" else Var "f"),
+            env)
   | Var x ->
       (try StringMap.find x env
        with Not_found -> raise (RuntimeError ("Unbound variable: " ^ x)))
@@ -54,6 +55,9 @@ let rec eval (env : env) (e : expr) : value =
       let vf = eval env f in
       let va = eval env a in
       (match vf with
+      | VFun ([], body, closure) ->
+          (* Handle zero-parameter functions by evaluating the body directly *)
+          eval closure body
       | VFun (x::xs, body, closure) ->
           let env' = StringMap.add x va closure in
           if xs = [] then eval env' body
@@ -72,12 +76,23 @@ let rec eval (env : env) (e : expr) : value =
   | Print e ->
       let v = eval env e in
       (match v with
-      | VInt n -> print_endline (string_of_int n)
-      | VLong n -> print_endline (Int64.to_string n)
-      | VBool b -> print_endline (string_of_bool b)
-      | VString s -> print_endline s
-      | _ -> print_endline "<fun>");
-      v
+      | VFun ([], body, closure) ->
+          (* Auto-invoke zero-parameter functions when printing
+             but don't print the result since the function itself
+             might contain print statements *)
+          eval closure body
+      | _ ->
+          print_value v;
+          v)
+
+and print_value = function
+  | VInt n -> print_endline (string_of_int n)
+  | VLong n -> print_endline (Int64.to_string n)
+  | VBool b -> print_endline (string_of_bool b)
+  | VString s -> print_endline s
+  | VFun ([x], Lam (y, Var vname), _) when vname = x -> print_endline "true"
+  | VFun ([x], Lam (y, Var vname), _) when vname = y -> print_endline "false"
+  | _ -> print_endline "<fun>"
 
 let rec eval_toplevel (env : env) (expr : expr) : env =
   match expr with
