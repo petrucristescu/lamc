@@ -5,6 +5,7 @@ module StringMap = Map.Make(String)
 type value =
   | VInt of int
   | VLong of int64
+  | VBool of bool
   | VString of string
   | VFun of string list * expr * env
   | VPrim of (value list -> value)
@@ -16,6 +17,7 @@ let rec eval (env : env) (e : expr) : value =
   match e with
   | Int n -> VInt n
   | Lng n -> VLong n
+  | Bool b -> VBool b
   | Str s -> VString s
   | Add (a, b) ->
       (match eval env a, eval env b with
@@ -59,6 +61,7 @@ let rec eval (env : env) (e : expr) : value =
       (match v with
       | VInt n -> print_endline (string_of_int n)
       | VLong n -> print_endline (Int64.to_string n)
+      | VBool b -> print_endline (string_of_bool b)
       | VString s -> print_endline s
       | _ -> print_endline "<fun>");
       v

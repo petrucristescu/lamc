@@ -1,0 +1,7 @@
+@b_v1 true
+@b_v2 false
+
+~(
+    print v1
+    print v2
+)

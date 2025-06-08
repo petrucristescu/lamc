@@ -1,6 +1,7 @@
 type expr =
   | Int of int
   | Lng of int64
+  | Bool of bool
   | Str of string
   | Add of expr * expr
   | Sub of expr * expr
@@ -14,6 +15,7 @@ type expr =
 
 let rec string_of_typ = function
   | Types.TInt -> "Int"
+  | Types.TBool -> "Bool"
   | Types.TString -> "String"
   | Types.TLong -> "Long"
   | Types.TUnknown -> "?"
@@ -23,6 +25,7 @@ let rec string_of_typ = function
 let rec string_of_expr = function
   | Int n -> string_of_int n
   | Lng n -> Int64.to_string n
+  | Bool b -> string_of_bool b
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
   | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
   | Var x -> x

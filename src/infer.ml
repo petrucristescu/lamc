@@ -74,6 +74,7 @@ let instantiate t =
 let rec infer env = function
   | Int _ -> ([], TInt)
   | Lng _ -> ([], TLong)
+  | Bool _ -> ([], TBool)
   | Str _ -> ([], TString)
   | Add (a, b) | Sub (a, b) ->
       let s1, t1 = infer env a in

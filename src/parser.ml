@@ -7,6 +7,7 @@ type token =
   | Integer of int
   | Long of int64
   | String of string
+  | Bool of bool
   | Plus
   | Minus
   | Lambda
@@ -65,11 +66,15 @@ let tokenize s =
       aux (i+1) line (col+1) ((Underscore, line, col) :: acc)
     else if is_letter s.[i] then
       let j = ref (i+1) in
-      while !j < String.length s && is_ident_char s.[!j] do
-        incr j
-      done;
+      while !j < String.length s && is_ident_char s.[!j] do incr j done;
       let name = String.sub s i (!j-i) in
-      aux !j line (col + (!j - i)) ((Ident name, line, col) :: acc)
+      let token =
+        match name with
+        | "true" -> Bool true
+        | "false" -> Bool false
+        | _ -> Ident name
+      in
+      aux !j line (col + (!j - i)) ((token, line, col) :: acc)
     else if is_digit s.[i] then
       let j = ref i in
       while !j < String.length s && is_digit s.[!j] do incr j done;
@@ -159,6 +164,8 @@ and parse_var_def tokens =
       parse_typed_var name (Int n) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Long n, _, _) :: rest ->
       parse_typed_var name (Lng n) rest line col
+  | (At, line, col) :: (Ident name, _, _) :: (Bool b, _, _) :: rest ->
+      parse_typed_var name (Bool b) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
       parse_typed_var name (Str s) rest line col
   | (At, line, col) :: (Ident name, _, _) :: rest ->
@@ -199,6 +206,7 @@ and parse_atom tokens =
   match tokens with
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
+  | (Bool b, _, _) :: rest -> (Bool b, rest)
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr rest in
       (Print arg, rest')
@@ -238,6 +246,7 @@ let string_of_typ t =
   let rec aux = function
     | TInt -> "Int"
     | TLong -> "Long"
+    | TBool -> "Bool"
     | TString -> "String"
     | TVar v -> "'" ^ v
     | TFun (a, b) -> "(" ^ aux a ^ " -> " ^ aux b ^ ")"

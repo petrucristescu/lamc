@@ -2,6 +2,7 @@ type typ =
   | TInt
   | TLong
   | TString
+  | TBool
   | TVar of string
   | TFun of typ * typ
   | TUnknown
