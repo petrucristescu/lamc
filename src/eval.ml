@@ -70,37 +70,37 @@ let rec eval (env : env) (e : expr) : value =
        | VFloat x, VInt y ->
          if float_of_int y = 0.0 then raise (RuntimeError "Division by zero") else VFloat (x /. (float_of_int y))
        | _ -> raise (RuntimeError "Type error in div"))
-  | Eq (a, b) ->
-      let va = eval env a in
-      let vb = eval env b in
-      let result =
-        match va, vb with
-        | VInt x, VInt y -> x = y
-        | VLong x, VLong y -> x = y
-        | VString x, VString y -> x = y
-        | VBool x, VBool y -> x = y
-        | _ -> false
-      in
-      VFun (["t"; "f"],
-            (if result then Var "t" else Var "f"),
-            env)
+    | Eq (a, b) ->
+        let va = eval env a in
+        let vb = eval env b in
+        let result =
+          match va, vb with
+          | VInt x, VInt y -> x = y
+          | VLong x, VLong y -> x = y
+          | VString x, VString y -> x = y
+          | VBool x, VBool y -> x = y
+          | _ -> false
+        in
+        VFun (["t"; "f"],
+              (if result then Var "t" else Var "f"),
+              env)
   | Var x ->
       (try StringMap.find x env
        with Not_found -> raise (RuntimeError ("Unbound variable: " ^ x)))
   | Lam (x, body) -> VFun ([x], body, env)
   | App (f, a) ->
-      let vf = eval env f in
-      let va = eval env a in
-      (match vf with
-      | VFun ([], body, closure) ->
-          (* Handle zero-parameter functions by evaluating the body directly *)
-          eval closure body
-      | VFun (x::xs, body, closure) ->
-          let env' = StringMap.add x va closure in
-          if xs = [] then eval env' body
-          else VFun (xs, body, env')
-      | VPrim fn -> fn [va]
-      | _ -> raise (RuntimeError "Attempt to call a non-function"))
+        let vf = eval env f in
+        let va = eval env a in
+        (match vf with
+        | VFun ([], body, closure) ->
+            (* Handle zero-parameter functions by evaluating the body directly *)
+            eval closure body
+        | VFun (x::xs, body, closure) ->
+            let env' = StringMap.add x va closure in
+            if xs = [] then eval env' body
+            else VFun (xs, body, env')
+        | VPrim fn -> fn [va]
+        | _ -> raise (RuntimeError "Attempt to call a non-function"))
   | Let (name, _, value) ->
       let v = eval env value in
       VFun ([], Var name, StringMap.add name v env) (* Not used at top-level *)
@@ -125,7 +125,12 @@ let rec eval (env : env) (e : expr) : value =
 and print_value = function
   | VInt n -> print_endline (string_of_int n)
   | VLong n -> print_endline (Int64.to_string n)
-  | VFloat f -> print_endline (string_of_float f)
+  | VFloat f ->
+      if Float.equal (Float.round f) f then
+        (* If the float is a whole number, print it as an integer without the decimal point *)
+        print_endline (string_of_int (int_of_float f))
+      else
+        print_endline (string_of_float f)
   | VBool b -> print_endline (string_of_bool b)
   | VString s -> print_endline s
   | VFun ([x], Lam (y, Var vname), _) when vname = x -> print_endline "true"

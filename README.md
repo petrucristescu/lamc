@@ -1,35 +1,79 @@
-# LAMC
-This is a compiler built using OCAML
+# LMC: Lambda Mini Calculus
 
-The intention here is to build something as close as possible to [Lambda Calculus](https://en.wikipedia.org/wiki/Lambda_calculus).
+LMC is a programming language that combines elements of [lambda calculus](https://en.wikipedia.org/wiki/Lambda_calculus) with practical programming features, implemented in OCaml.
 
-The name comes from the lambda+calculus
+## Core Features
 
-### Prerequisites
+### Type System
+- Basic types: `Int`, `Long` (64-bit integers), `Float`, `Bool`, `String`
+- Function types
+- Hindley-Milner type inference
 
-OCaml is required to build this compiler. You can install it using OPAM, the OCaml package manager.
+### Expressions
+- Numeric literals: integers (`123`), longs (`123l`), floats (`3.14`, `.5`, `123f`)
+- String literals (in double quotes: `"hello"`)
+- Boolean literals (`true`, `false`)
+- Variables
+- Lambda functions
+- Function application
+- Arithmetic operations (`+`, `-`, `*`, `/`)
+- Equality testing (`eq`)
 
-### Building the Compiler
+### Declarations
+- Variable declarations (with optional type annotations)
+- Function definitions
 
-dune build
+### I/O
+- `print` expression for output
 
-### Testing the Compiler
+## Syntax Examples
 
-dune exec src/lmc.exe test.lmc
+```lmc
+// Variable declarations
+@i_v1 4        // Integer
+@l_v3 4l       // Long integer
+@f_v5 2.4      // Float
+@s_v2 "string" // String
 
-### Feature Flags
+// Function definitions
+~add x,y x + y
+~mul x,y x * y
+~div x,y x / y
 
-You can control the compiler's output using the following command-line flags:
+// Main program block
+~(
+    print (add 2 3)
+    print (div 9 4)   // Returns 2.25 as a float
+)
+```
 
-- `--ast`  
-  Prints the parsed Abstract Syntax Tree (AST) for the input file.
+## Implementation
 
-- `--result`  
-  Evaluates every expression in the file and prints the result for each line, including variable and function definitions.
+LMC is implemented in OCaml with several key components:
 
-#### Example Usage
+1. **Lexer/Parser** (`parser.ml`): Tokenizes and parses the source code into an abstract syntax tree
+2. **AST** (`ast.ml`): Defines the abstract syntax tree for the language
+3. **Type System** (`types.ml`): Defines types and type operations
+4. **Type Inference** (`infer.ml`): Implements Hindley-Milner type inference
+5. **Evaluator** (`eval.ml`): Interprets the AST to execute programs
 
-```sh
-dune exec src/lmc.exe -- --ast test.lmc
-dune exec src/lmc.exe -- --result test.lmc
+## Features
 
+- **Type inference**: Types are inferred automatically
+- **First-class functions**: Functions can be passed as arguments and returned as values
+- **Floating-point division**: Division always gives precise floating-point results
+- **Smart number formatting**: Whole number results are displayed without decimal points
+
+## Usage
+
+```bash
+# Run a program
+./lmc.exe examples/operators.lmc
+
+# Run with type inference output
+./lmc.exe --show-types examples/operators.lmc
+```
+
+## Design Philosophy
+
+LMC combines functional programming concepts with practical features like arithmetic operations and I/O. It serves as an educational tool for understanding lambda calculus and functional programming concepts while providing practical utility.

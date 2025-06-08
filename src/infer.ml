@@ -29,7 +29,7 @@ let rec occurs v = function
 
 let rec unify t1 t2 =
   match t1, t2 with
-  | TInt, TInt | TLong, TLong | TString, TString -> []
+  | TInt, TInt | TLong, TLong | TFloat, TFloat | TString, TString -> []
   | TVar v, t | t, TVar v ->
       if t = TVar v then [] else
       if occurs v t then raise (TypeError ("Occurs check: " ^ v))
@@ -74,18 +74,27 @@ let instantiate t =
 let rec infer env = function
   | Int _ -> ([], TInt)
   | Lng _ -> ([], TLong)
-  | Float _ -> ([], TLong)
+  | Float _ -> ([], TFloat)
   | Bool _ -> ([], TBool)
   | Str _ -> ([], TString)
-  | Add (a, b) | Sub (a, b) | Mul(a, b) | Div (a, b)->
+  | Add (a, b) | Sub (a, b) | Mul(a, b) ->
       let s1, t1 = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
       let t1 = apply s2 t1 in
       let t2 = apply s2 t2 in
       let s3 = unify t1 t2 in
-      let t = apply s3 t1 in
-      let s4 = unify t (TInt) in
-      (compose s4 (compose s3 (compose s2 s1)), TInt)
+      (s3, apply s3 t1)
+  | Div (a, b) ->
+      let s1, t1 = infer env a in
+      let s2, t2 = infer (StringMap.map (apply s1) env) b in
+      let t1 = apply s2 t1 in
+      let t2 = apply s2 t2 in
+      let s3 = unify t1 t2 in
+      (* For division, ensure the result is at least a float *)
+      if apply s3 t1 = TFloat || apply s3 t1 = TInt || apply s3 t1 = TLong then
+        (s3, TFloat)
+      else
+        (s3, apply s3 t1)
   | Eq (a, b) ->
       let s1, t1 = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
