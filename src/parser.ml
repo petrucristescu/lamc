@@ -41,8 +41,25 @@ let tokenize s =
   let is_whitespace c =
     c = ' ' || c = '\t' || c = '\r'
   in
+  let rec skip_single_line_comment i line col =
+    if i >= String.length s || s.[i] = '\n' then (i, line, col)
+    else skip_single_line_comment (i+1) line (col+1)
+  in
+  let rec skip_multiline_comment i line col =
+    if i >= String.length s then (i, line, col)
+    else if s.[i] = ')' then (i+1, line, col+1)
+    else if s.[i] = '\n' then skip_multiline_comment (i+1) (line+1) 1
+    else skip_multiline_comment (i+1) line (col+1)
+  in
   let rec aux i line col acc =
     if i >= String.length s then List.rev ((Eof, line, col) :: acc)
+    else if s.[i] = '#' then
+      if i+1 < String.length s && s.[i+1] = '(' then
+        let (j, line', col') = skip_multiline_comment (i+2) line (col+2) in
+        aux j line' col' acc
+      else
+        let (j, line', col') = skip_single_line_comment (i+1) line (col+1) in
+        aux j line' col' acc
     else if s.[i] = '\n' then
       aux (i+1) (line+1) 1 ((Newline, line, col) :: acc)
     else if s.[i] = '(' then

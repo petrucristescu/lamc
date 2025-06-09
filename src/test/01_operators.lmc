@@ -1,3 +1,5 @@
+# Lambda+Calculus Compiler
+
 @i_v1 4
 @s_v2 "string"
 @l_v3 4l
@@ -8,6 +10,10 @@
 ~sub x,y x - y
 ~mul x,y x * y
 ~div x,y x / y
+
+#(
+    main function
+)
 
 ~(
     print (add 2 3)
