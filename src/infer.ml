@@ -58,6 +58,30 @@ let generalize env t =
   let tvars = vars [] t in
   List.filter (fun v -> not (List.mem v env_vars)) tvars
 
+let add_operators_to_env env =
+  let t_bool =
+    let a = fresh_var () in
+    TFun (a, TFun (a, a))
+  in
+  let env = StringMap.add "true" t_bool env in
+  let env = StringMap.add "false" t_bool env in
+
+  let t_if =
+    let a = fresh_var () in
+    TFun (t_bool, TFun (a, TFun (a, a)))
+  in
+  let env = StringMap.add "if" t_if env in
+
+  let t_not = TFun (t_bool, t_bool) in
+  let env = StringMap.add "not" t_not env in
+
+  let t_and = TFun (t_bool, TFun (t_bool, t_bool)) in
+  let env = StringMap.add "and" t_and env in
+
+  let t_or = TFun (t_bool, TFun (t_bool, t_bool)) in
+  let env = StringMap.add "or" t_or env in
+  env
+
 let instantiate t =
   let subst = ref [] in
   let rec aux = function
@@ -75,7 +99,6 @@ let rec infer env = function
   | Int _ -> ([], TInt)
   | Lng _ -> ([], TLong)
   | Float _ -> ([], TFloat)
-  | Bool _ -> ([], TBool)
   | Str _ -> ([], TString)
   | Add (a, b) | Sub (a, b) | Mul(a, b) ->
       let s1, t1 = infer env a in
@@ -90,7 +113,6 @@ let rec infer env = function
       let t1 = apply s2 t1 in
       let t2 = apply s2 t2 in
       let s3 = unify t1 t2 in
-      (* For division, ensure the result is at least a float *)
       if apply s3 t1 = TFloat || apply s3 t1 = TInt || apply s3 t1 = TLong then
         (s3, TFloat)
       else
@@ -99,11 +121,21 @@ let rec infer env = function
       let s1, t1 = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
       let s3 = unify t1 t2 in
-      (compose s3 (compose s2 s1), TFun (TVar "a", TFun (TVar "a", TVar "a")))
+      let a = fresh_var () in
+      let b = fresh_var () in
+      (compose s3 (compose s2 s1), TFun (a, TFun (b, a)))
   | Var x ->
       (match StringMap.find_opt x env with
       | Some t -> ([], instantiate t)
       | None -> raise (TypeError ("Unbound variable: " ^ x)))
+  | Lam (x, Lam (y, Var v)) when v = x ->
+      let a = fresh_var () in
+      let b = fresh_var () in
+      ([], TFun (a, TFun (b, a)))
+  | Lam (x, Lam (y, Var v)) when v = y ->
+      let a = fresh_var () in
+      let b = fresh_var () in
+      ([], TFun (a, TFun (b, b)))
   | Lam (x, body) ->
       let tv = fresh_var () in
       let env' = StringMap.add x tv env in
@@ -131,3 +163,8 @@ let rec infer env = function
   | Print e ->
       let s1, t1 = infer env e in
       (s1, t1)
+  | Import _ ->
+      (* Import statements don't have a meaningful type themselves,
+         they just make definitions available in the environment.
+         Return unit type as a convention. *)
+      ([], TInt)

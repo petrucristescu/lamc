@@ -8,7 +8,6 @@ type token =
   | Long of int64
   | Float of float
   | String of string
-  | Bool of bool
   | Plus
   | Minus
   | Multiply
@@ -24,6 +23,7 @@ type token =
   | RParen
   | Comma
   | Newline
+  | Import  (* New token for import keyword *)
   | Eof
 
 type pos_token = token * int * int
@@ -92,8 +92,9 @@ let tokenize s =
       let name = String.sub s i (!j-i) in
       let token =
         match name with
-        | "true" -> Bool true
-        | "false" -> Bool false
+        | "true" -> Ident "__church_true"
+        | "false" -> Ident "__church_false"
+        | "import" -> Import  (* New token for import keyword *)
         | _ -> Ident name
       in
       aux !j line (col + (!j - i)) ((token, line, col) :: acc)
@@ -143,30 +144,22 @@ let tokenize s =
   in
   aux 0 1 1 []
 
-let rec parse_expr tokens = parse_fun_def tokens
-
-and skip_newlines = function
+(* Helper function for skipping newline tokens *)
+let rec skip_newlines = function
   | (Newline, _, _) :: rest -> skip_newlines rest
   | tokens -> tokens
 
-and parse_seq tokens =
-  let rec aux toks acc =
-    let toks = skip_newlines toks in
-    match toks with
-    | (RParen, _, _) :: rest -> (List.rev acc, rest)
-    | [] | (Eof, _, _) :: _ -> (List.rev acc, toks)
-    | _ ->
-        let expr, toks' = parse_expr toks in
-        aux toks' (expr :: acc)
-  in
-  let exprs, rest = aux tokens [] in
-  match exprs with
-  | [] -> (Int 0, rest)
-  | [e] -> (e, rest)
-  | e1 :: es -> (List.fold_left (fun acc e -> Seq (acc, e)) e1 es, rest)
+(* Define all parsing functions with proper mutual recursion *)
+let rec parse_expr tokens = parse_fun_def tokens
 
 and parse_fun_def tokens =
   match tokens with
+  | (Tilde, _, _) :: (Import, _, _) :: (Ident library, _, _) :: rest ->
+      let import_expr = Ast.Import library in
+      (import_expr, rest)  (* Handle ~import syntax *)
+  | (Tilde, _, _) :: (Ident "import", _, _) :: (Ident library, _, _) :: rest ->
+      let import_expr = Ast.Import library in
+      (import_expr, rest)  (* Alternative ~import syntax *)
   | (Tilde, _, _) :: (LParen, _, _) :: rest ->
       let body, rest' = parse_seq rest in
       (FunDef ("main", [], body), rest')
@@ -187,6 +180,22 @@ and parse_fun_def tokens =
       in
       (FunDef (name, args, body), rest'')
   | _ -> parse_var_def tokens
+
+and parse_seq tokens =
+  let rec aux toks acc =
+    let toks = skip_newlines toks in
+    match toks with
+    | (RParen, _, _) :: rest -> (List.rev acc, rest)
+    | [] | (Eof, _, _) :: _ -> (List.rev acc, toks)
+    | _ ->
+        let expr, toks' = parse_expr toks in
+        aux toks' (expr :: acc)
+  in
+  let exprs, rest = aux tokens [] in
+  match exprs with
+  | [] -> (Int 0, rest)
+  | [e] -> (e, rest)
+  | e1 :: es -> (List.fold_left (fun acc e -> Seq (acc, e)) e1 es, rest)
 
 and parse_var_def tokens =
   let parse_typed_var name value rest line col =
@@ -209,9 +218,9 @@ and parse_var_def tokens =
       parse_typed_var name (Lng n) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Float f, _, _) :: rest ->
       parse_typed_var name (Float f) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Bool true, _, _) :: rest ->
+  | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_true", _, _) :: rest ->
       parse_typed_var name (Lam ("x", Lam ("y", Var "x"))) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Bool false, _, _) :: rest ->
+  | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_false", _, _) :: rest ->
       parse_typed_var name (Lam ("x", Lam ("y", Var "y"))) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
       parse_typed_var name (Str s) rest line col
@@ -248,36 +257,42 @@ and parse_app tokens =
     | (Ident _, _, _) :: _
     | (LParen, _, _) :: _
     | (String _, _, _) :: _ ->
-        let arg, rest = parse_atom toks in
+        let arg, rest = parse_primary toks in
         aux (App (acc, arg)) rest
     | _ -> (acc, toks)
   in
-  let atom, rest = parse_atom tokens in
+  let atom, rest = parse_primary tokens in
   aux atom rest
 
-and parse_atom tokens =
+and parse_primary tokens =
   match tokens with
+  | (Import, line, col) :: (Ident library, _, _) :: rest ->
+      (Import library, rest)  (* Handle import statements *)
+  | (Import, line, col) :: (String library, _, _) :: rest ->
+      (Import library, rest)  (* Handle import with string literals too *)
+  | (Tilde, _, _) :: (Ident x, _, _) :: rest ->
+      (Var ("~" ^ x), rest)  (* Allow ~foo as a variable reference in expressions *)
+  | (Ident "__church_true", _, _) :: rest ->
+      (Lam ("t", Lam ("f", Var "t")), rest)
+  | (Ident "__church_false", _, _) :: rest ->
+      (Lam ("t", Lam ("f", Var "f")), rest)
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
   | (Float f, _, _) :: rest -> (Float f, rest)
-  | (Bool true, _, _) :: rest -> (Lam ("x", Lam ("y", Var "x")), rest)
-  | (Bool false, _, _) :: rest -> (Lam ("x", Lam ("y", Var "y")), rest)
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr (skip_newlines rest) in
       (Print arg, rest')
   | (Ident "eq", _, _) :: rest ->
-      let a, rest' = parse_atom (skip_newlines rest) in
-      let b, rest'' = parse_atom (skip_newlines rest') in
+      let a, rest' = parse_primary (skip_newlines rest) in
+      let b, rest'' = parse_primary (skip_newlines rest') in
       let rest''' = skip_newlines rest'' in
       (match rest''' with
        | (String s, _, _) :: rest'''' ->
-           (* Third argument is a string literal *)
-           let f, rest''''' = parse_atom (skip_newlines rest'''') in
+           let f, rest''''' = parse_primary (skip_newlines rest'''') in
            (App (App (Eq (a, b), Str s), f), rest''''')
        | (LParen, _, _) :: _ ->
-           (* Third argument is a parenthesized expression *)
-           let t, rest'''' = parse_atom rest''' in
-           let f, rest''''' = parse_atom (skip_newlines rest'''') in
+           let t, rest'''' = parse_primary rest''' in
+           let f, rest''''' = parse_primary (skip_newlines rest'''') in
            (App (App (Eq (a, b), t), f), rest''''')
        | _ -> (Eq (a, b), rest'''))
   | (Ident x, _, _) :: rest -> (Var x, rest)
@@ -329,7 +344,7 @@ let string_of_typ t =
 
 let parse_and_infer ?(show_types=true) input =
   let exprs = parse input in
-  let env = Types.StringMap.empty in
+  let env = Infer.add_operators_to_env Types.StringMap.empty in
   let rec infer_toplevel env = function
     | [] -> ()
     | expr :: rest ->

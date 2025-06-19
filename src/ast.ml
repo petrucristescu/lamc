@@ -2,7 +2,6 @@ type expr =
   | Int of int
   | Lng of int64
   | Float of float
-  | Bool of bool
   | Str of string
   | Add of expr * expr
   | Sub of expr * expr
@@ -16,6 +15,7 @@ type expr =
   | FunDef of string * string list * expr
   | Seq of expr * expr
   | Print of expr
+  | Import of string  (* New constructor for importing libraries *)
 
 let rec string_of_typ = function
   | Types.TInt -> "Int"
@@ -31,7 +31,6 @@ let rec string_of_expr = function
   | Int n -> string_of_int n
   | Lng n -> Int64.to_string n
   | Float f -> string_of_float f
-  | Bool b -> string_of_bool b
   | Eq (a, b) -> "(" ^ string_of_expr a ^ " == " ^ string_of_expr b ^ ")"
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
   | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"
@@ -47,6 +46,7 @@ let rec string_of_expr = function
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
   | Print e -> "print " ^ string_of_expr e
+  | Import lib -> "import " ^ lib  (* String representation for Import *)
 
 let string_of_exprs exprs =
   String.concat "\n" (List.map string_of_expr exprs)
