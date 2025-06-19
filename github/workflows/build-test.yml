@@ -1,0 +1,24 @@
+- name: Build lmc executable
+  run: |
+    dune build src/lmc.exe
+    # Copy executable to a more accessible location
+    mkdir -p target
+    cp _build/default/src/lmc.exe target/
+
+- name: Run tests
+  run: |
+    # Create a directory to store test results
+    mkdir -p test_results
+
+    # Run all test files and store output
+    for test_file in src/test/*.lmc; do
+      echo "Running test: $test_file"
+      target/lmc.exe "$test_file" > "test_results/$(basename "$test_file").out" 2>&1
+      # Check if there were exceptions
+      if grep -i "exception\|error\|fail" "test_results/$(basename "$test_file").out"; then
+        echo "Test failed: $test_file"
+        exit 1
+      fi
+    done
+
+    echo "All tests passed!"
