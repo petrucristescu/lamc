@@ -1,0 +1,56 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup OCaml cache
+        id: setup-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.opam
+            _opam
+            /usr/local/bin/opam
+            /home/runner/.local/bin/opam
+          key: ${{ runner.os }}-ocaml-${{ hashFiles('*.opam', '**/*.opam') }}-v1
+
+      - name: Set up OCaml environment
+        if: steps.setup-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          wget https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-x86_64-linux -O /tmp/opam
+          sudo mv /tmp/opam /usr/local/bin/opam
+          sudo chmod +x /usr/local/bin/opam
+          opam init --disable-sandboxing --no-setup --compiler=ocaml-base-compiler.5.1.1 -y
+          opam install dune -y
+          opam install . --deps-only -y
+
+      - name: Build lmc executable
+        run: |
+          eval $(opam env)
+          dune build src/lmc.exe
+          mkdir -p test_results
+
+      - name: Run tests
+        run: |
+          eval $(opam env)
+          for test_file in src/test/*.lmc; do
+            test_name=$(basename "$test_file" .lmc)
+            expected_output="src/test/${test_name}.lmc.out"
+
+            _build/default/src/lmc.exe "$test_file" > "test_results/${test_name}.out" 2>&1
+
+            diff -u "test_results/${test_name}.out" "$expected_output" ||
+              (echo "Test failed: $test_name" && exit 1)
+          done
