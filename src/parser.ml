@@ -272,6 +272,12 @@ and parse_primary tokens =
       (Import library, rest)  (* Handle import with string literals too *)
   | (Tilde, _, _) :: (Ident x, _, _) :: rest ->
       (Var ("~" ^ x), rest)  (* Allow ~foo as a variable reference in expressions *)
+  | (Lambda, _, _) :: (Ident x, _, _) :: (Dot, _, _) :: rest ->
+      let body, rest' = parse_expr (skip_newlines rest) in
+      (Lam (x, body), rest')
+  | (Lambda, _, _) :: (Underscore, _, _) :: (Dot, _, _) :: rest ->
+      let body, rest' = parse_expr (skip_newlines rest) in
+      (Lam ("_", body), rest')
   | (Ident "__church_true", _, _) :: rest ->
       (Lam ("t", Lam ("f", Var "t")), rest)
   | (Ident "__church_false", _, _) :: rest ->
