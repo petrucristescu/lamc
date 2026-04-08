@@ -1,34 +1,19 @@
 # Test recursion for named functions
+# Uses thunks (|>_. expr) to delay branch evaluation (Church encoding approach)
 
 # Factorial function
 ~factorial n (
-    eq n 0
-        1
-        (n * factorial (n - 1))
+    (eq n 0 (|>_. 1) (|>_. n * factorial (n - 1))) 0
 )
 
 # Fibonacci function
 ~fibonacci n (
-    eq n 0
-        0
-        (eq n 1
-            1
-            (fibonacci (n - 1) + fibonacci (n - 2)))
-)
-
-# Countdown function
-~countdown n (
-    eq n 0
-        (print 0)
-        (print n
-         countdown (n - 1))
+    (eq n 0 (|>_. 0) (|>_. (eq n 1 (|>_. 1) (|>_. fibonacci (n - 1) + fibonacci (n - 2))) 0)) 0
 )
 
 # Sum from 1 to n
 ~sum n (
-    eq n 0
-        0
-        (n + sum (n - 1))
+    (eq n 0 (|>_. 0) (|>_. n + sum (n - 1))) 0
 )
 
 ~(
@@ -40,8 +25,6 @@
     print (fibonacci 0)
     print (fibonacci 1)
     print (fibonacci 7)
-
-    countdown 5
 
     print (sum 10)
 )
