@@ -8,6 +8,7 @@ type value =
   | VFloat of float
   | VString of string
   | VFun of string list * expr * env
+  | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
 and env = value StringMap.t
 
@@ -67,7 +68,7 @@ let print_value = function
   | VString s -> print_endline s
   | VFun ([x], Lam (y, Var vname), _) when vname = x -> print_endline "true"
   | VFun ([x], Lam (y, Var vname), _) when vname = y -> print_endline "false"
-  | _ -> print_endline "<fun>"
+  | VRecFun _ | _ -> print_endline "<fun>"
 
 (* Special handling for Church-encoded boolean functions *)
 let create_church_booleans env =
@@ -114,9 +115,7 @@ let rec eval_with_imports env expr =
           (fun acc_env expr ->
             match expr with
             | FunDef (name, args, body) ->
-                (* Create a self-referential closure so library functions can be recursive *)
-                let rec_env = StringMap.add name (VFun (args, body, acc_env)) acc_env in
-                let func_val = VFun (args, body, rec_env) in
+                let func_val = VRecFun (name, args, body, acc_env) in
                 StringMap.add name func_val acc_env
             | Let (name, _, value_expr) ->
                 (* Evaluate the value and add to environment *)
@@ -229,15 +228,22 @@ let rec eval_with_imports env expr =
              let (_, result) = eval_with_imports closure' body in
              result
            else VFun (xs, body, closure')
+       | VRecFun (name, x::xs, body, closure) ->
+           (* Bind the function's own name in its closure for recursion *)
+           let self = VRecFun (name, x::xs, body, closure) in
+           let closure' = StringMap.add name self (StringMap.add x va closure) in
+           if xs = [] then
+             let (_, result) = eval_with_imports closure' body in
+             result
+           else VFun (xs, body, closure')
        | VPrim fn -> fn [va]
        | _ -> raise (RuntimeError "Attempt to call a non-function"))
   | Let (name, _, value) ->
       let (env', v) = eval_with_imports env value in
       (StringMap.add name v env', VFun ([], Var name, StringMap.add name v env'))
   | FunDef (name, args, body) ->
-      (* Create a self-referential closure so the function can call itself recursively *)
-      let rec_env = StringMap.add name (VFun (args, body, env)) env in
-      let f = VFun (args, body, rec_env) in
+      let f = if args = [] then VFun (args, body, env)
+              else VRecFun (name, args, body, env) in
       let env' = StringMap.add name f env in
       (env', VFun ([], Var name, env'))
   | Seq (a, b) ->
@@ -271,9 +277,8 @@ let rec eval_toplevel (env : env) (expr : expr) : env =
       let v = eval env value in
       StringMap.add name v env
   | FunDef (name, args, body) ->
-      (* Create a self-referential closure so the function can call itself recursively *)
-      let rec_env = StringMap.add name (VFun (args, body, env)) env in
-      let f = VFun (args, body, rec_env) in
+      let f = if args = [] then VFun (args, body, env)
+              else VRecFun (name, args, body, env) in
       StringMap.add name f env
   | Import lib_name ->
       (* Process imports directly at toplevel to update the environment *)

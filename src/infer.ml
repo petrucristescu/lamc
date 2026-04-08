@@ -152,10 +152,16 @@ let rec infer env = function
       (s1, t1)
   | FunDef (name, args, body) ->
       let arg_types = List.map (fun _ -> fresh_var ()) args in
+      let ret_type = fresh_var () in
+      let fun_type = List.fold_right (fun a b -> TFun (a, b)) arg_types ret_type in
       let env' = List.fold_left2 (fun e a t -> StringMap.add a t e) env args arg_types in
+      (* Add the function itself to the env so recursive calls type-check *)
+      let env' = StringMap.add name fun_type env' in
       let s1, t1 = infer env' body in
-      let t = List.fold_right (fun a b -> TFun (a, b)) (List.map (apply s1) arg_types) t1 in
-      (s1, t)
+      let s2 = unify (apply s1 ret_type) t1 in
+      let s = compose s2 s1 in
+      let t = List.fold_right (fun a b -> TFun (a, b)) (List.map (apply s) arg_types) (apply s t1) in
+      (s, t)
   | Seq (a, b) ->
       let s1, _ = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
