@@ -114,8 +114,9 @@ let rec eval_with_imports env expr =
           (fun acc_env expr ->
             match expr with
             | FunDef (name, args, body) ->
-                (* For Church-encoded functions, we need to create proper closures *)
-                let func_val = VFun (args, body, acc_env) in
+                (* Create a self-referential closure so library functions can be recursive *)
+                let rec_env = StringMap.add name (VFun (args, body, acc_env)) acc_env in
+                let func_val = VFun (args, body, rec_env) in
                 StringMap.add name func_val acc_env
             | Let (name, _, value_expr) ->
                 (* Evaluate the value and add to environment *)
@@ -234,8 +235,11 @@ let rec eval_with_imports env expr =
       let (env', v) = eval_with_imports env value in
       (StringMap.add name v env', VFun ([], Var name, StringMap.add name v env'))
   | FunDef (name, args, body) ->
-      let f = VFun (args, body, env) in
-      (StringMap.add name f env, VFun ([], Var name, StringMap.add name f env))
+      (* Create a self-referential closure so the function can call itself recursively *)
+      let rec_env = StringMap.add name (VFun (args, body, env)) env in
+      let f = VFun (args, body, rec_env) in
+      let env' = StringMap.add name f env in
+      (env', VFun ([], Var name, env'))
   | Seq (a, b) ->
       let (env', _) = eval_with_imports env a in
       eval_with_imports env' b
@@ -267,7 +271,9 @@ let rec eval_toplevel (env : env) (expr : expr) : env =
       let v = eval env value in
       StringMap.add name v env
   | FunDef (name, args, body) ->
-      let f = VFun (args, body, env) in
+      (* Create a self-referential closure so the function can call itself recursively *)
+      let rec_env = StringMap.add name (VFun (args, body, env)) env in
+      let f = VFun (args, body, rec_env) in
       StringMap.add name f env
   | Import lib_name ->
       (* Process imports directly at toplevel to update the environment *)
