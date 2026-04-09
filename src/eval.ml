@@ -10,6 +10,7 @@ type value =
   | VFun of string list * expr * env
   | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
+  | VTailCall of env * expr  (* Trampoline marker for tail call optimization *)
 and env = value StringMap.t
 
 exception RuntimeError of string
@@ -68,6 +69,7 @@ let print_value = function
   | VString s -> print_endline s
   | VFun ([x], Lam (y, Var vname), _) when vname = x -> print_endline "true"
   | VFun ([x], Lam (y, Var vname), _) when vname = y -> print_endline "false"
+  | VTailCall _ -> print_endline "<tailcall>"
   | VRecFun _ | _ -> print_endline "<fun>"
 
 (* Special handling for Church-encoded boolean functions *)
@@ -94,6 +96,7 @@ let create_church_booleans env =
   final_env
 
 (* Define an eval_with_imports function to handle environment properly *)
+(* eval_with_imports and force are mutually recursive for tail call optimization *)
 let rec eval_with_imports env expr =
   match expr with
   | Import lib_name ->
@@ -120,10 +123,11 @@ let rec eval_with_imports env expr =
             | Let (name, _, value_expr) ->
                 (* Evaluate the value and add to environment *)
                 let (_, value) = eval_with_imports acc_env value_expr in
-                StringMap.add name value acc_env
+                StringMap.add name (force value) acc_env
             | _ ->
                 (* Evaluate other expressions but don't add to environment *)
-                let (_, _) = eval_with_imports acc_env expr in
+                let (_, v) = eval_with_imports acc_env expr in
+                ignore (force v);
                 acc_env
           ) env lib_exprs
         in
@@ -137,7 +141,9 @@ let rec eval_with_imports env expr =
   | Str s -> (env, VString s)
   | Add (a, b) ->
       let (env', va) = eval_with_imports env a in
+      let va = force va in
       let (env'', vb) = eval_with_imports env' b in
+      let vb = force vb in
       (env'',
        match va, vb with
        | VInt x, VInt y -> VInt (x + y)
@@ -150,7 +156,9 @@ let rec eval_with_imports env expr =
        | _ -> raise (RuntimeError "Type error in add"))
   | Sub (a, b) ->
       let (env', va) = eval_with_imports env a in
+      let va = force va in
       let (env'', vb) = eval_with_imports env' b in
+      let vb = force vb in
       (env'',
        match va, vb with
        | VInt x, VInt y -> VInt (x - y)
@@ -163,7 +171,9 @@ let rec eval_with_imports env expr =
        | _ -> raise (RuntimeError "Type error in sub"))
   | Mul (a, b) ->
       let (env', va) = eval_with_imports env a in
+      let va = force va in
       let (env'', vb) = eval_with_imports env' b in
+      let vb = force vb in
       (env'',
        match va, vb with
        | VInt x, VInt y -> VInt (x * y)
@@ -176,7 +186,9 @@ let rec eval_with_imports env expr =
        | _ -> raise (RuntimeError "Type error in mul"))
   | Div (a, b) ->
       let (env', va) = eval_with_imports env a in
+      let va = force va in
       let (env'', vb) = eval_with_imports env' b in
+      let vb = force vb in
       (env'',
        match va, vb with
        | _, VInt 0 -> raise (RuntimeError "Division by zero")
@@ -198,7 +210,9 @@ let rec eval_with_imports env expr =
        | _ -> raise (RuntimeError "Type error in div"))
   | Eq (a, b) ->
       let (env', va) = eval_with_imports env a in
+      let va = force va in
       let (env'', vb) = eval_with_imports env' b in
+      let vb = force vb in
       let result =
         match va, vb with
         | VInt x, VInt y -> x = y
@@ -215,31 +229,33 @@ let rec eval_with_imports env expr =
   | Lam (x, body) -> (env, VFun ([x], body, env))
   | App (f, a) ->
       let (env', vf) = eval_with_imports env f in
+      let vf = force vf in
       let (env'', va) = eval_with_imports env' a in
+      let va = force va in
       (env'',
        match vf with
        | VFun ([], body, closure) ->
-           (* Handle zero-parameter functions by evaluating the body directly *)
-           let (_, result) = eval_with_imports closure body in
-           result
+           (* Tail call: defer body evaluation *)
+           VTailCall (closure, body)
        | VFun (x::xs, body, closure) ->
            let closure' = StringMap.add x va closure in
            if xs = [] then
-             let (_, result) = eval_with_imports closure' body in
-             result
+             (* Tail call: defer body evaluation *)
+             VTailCall (closure', body)
            else VFun (xs, body, closure')
        | VRecFun (name, x::xs, body, closure) ->
            (* Bind the function's own name in its closure for recursion *)
            let self = VRecFun (name, x::xs, body, closure) in
            let closure' = StringMap.add name self (StringMap.add x va closure) in
            if xs = [] then
-             let (_, result) = eval_with_imports closure' body in
-             result
+             (* Tail call: defer body evaluation *)
+             VTailCall (closure', body)
            else VFun (xs, body, closure')
        | VPrim fn -> fn [va]
        | _ -> raise (RuntimeError "Attempt to call a non-function"))
   | Let (name, _, value) ->
       let (env', v) = eval_with_imports env value in
+      let v = force v in
       (StringMap.add name v env', VFun ([], Var name, StringMap.add name v env'))
   | FunDef (name, args, body) ->
       let f = if args = [] then VFun (args, body, env)
@@ -247,26 +263,35 @@ let rec eval_with_imports env expr =
       let env' = StringMap.add name f env in
       (env', VFun ([], Var name, env'))
   | Seq (a, b) ->
-      let (env', _) = eval_with_imports env a in
+      let (env', va) = eval_with_imports env a in
+      ignore (force va); (* Force first expression for side effects *)
       eval_with_imports env' b
   | Print e ->
       let (env', v) = eval_with_imports env e in
+      let v = force v in
       let result =
         match v with
         | VFun ([], body, closure) ->
             (* Auto-invoke zero-parameter functions when printing *)
             let (_, v') = eval_with_imports closure body in
-            v'
+            force v'
         | _ ->
             print_value v;
             v
       in
       (env', result)
 
+(* Trampoline: resolve VTailCall chains without growing the stack.
+   force is tail-recursive, so OCaml optimizes it into a loop. *)
+and force = function
+  | VTailCall (tc_env, tc_expr) ->
+      force (snd (eval_with_imports tc_env tc_expr))
+  | v -> v
+
 (* Simple wrapper around eval_with_imports to keep original interface *)
 let eval env expr =
   let (_, value) = eval_with_imports env expr in
-  value
+  force value
 
 let rec eval_toplevel (env : env) (expr : expr) : env =
   match expr with
