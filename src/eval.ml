@@ -219,12 +219,12 @@ let rec eval_with_imports env expr =
   | Let (name, _, value) ->
       let (env', v) = eval_with_imports env value in
       let v = force v in
-      (StringMap.add name v env', VFun ([], Var name, StringMap.add name v env'))
+      (StringMap.add name v env', v)
   | FunDef (name, args, body) ->
       let f = if args = [] then VFun (args, body, env)
               else VRecFun (name, args, body, env) in
       let env' = StringMap.add name f env in
-      (env', VFun ([], Var name, env'))
+      (env', f)
   | Seq (a, b) ->
       let (env', va) = eval_with_imports env a in
       ignore (force va); (* Force first expression for side effects *)
