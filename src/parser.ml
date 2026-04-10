@@ -219,9 +219,9 @@ and parse_var_def tokens =
   | (At, line, col) :: (Ident name, _, _) :: (Float f, _, _) :: rest ->
       parse_typed_var name (Float f) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_true", _, _) :: rest ->
-      parse_typed_var name (Lam ("x", Lam ("y", Var "x"))) rest line col
+      parse_typed_var name (Bool true) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_false", _, _) :: rest ->
-      parse_typed_var name (Lam ("x", Lam ("y", Var "y"))) rest line col
+      parse_typed_var name (Bool false) rest line col
   | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
       parse_typed_var name (Str s) rest line col
   | (At, line, col) :: (Ident name, _, _) :: rest ->
@@ -290,9 +290,9 @@ and parse_primary tokens =
       let body, rest' = parse_expr (skip_newlines rest) in
       (Lam ("_", body), rest')
   | (Ident "__church_true", _, _) :: rest ->
-      (Lam ("t", Lam ("f", Var "t")), rest)
+      (Bool true, rest)
   | (Ident "__church_false", _, _) :: rest ->
-      (Lam ("t", Lam ("f", Var "f")), rest)
+      (Bool false, rest)
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
   | (Float f, _, _) :: rest -> (Float f, rest)

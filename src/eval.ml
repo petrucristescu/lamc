@@ -7,6 +7,7 @@ type value =
   | VLong of int64
   | VFloat of float
   | VString of string
+  | VBool of bool
   | VFun of string list * expr * env
   | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
@@ -62,38 +63,42 @@ let print_value = function
   | VLong n -> print_endline (Int64.to_string n)
   | VFloat f ->
       if Float.equal (Float.round f) f then
-        (* If the float is a whole number, print it as an integer without the decimal point *)
         print_endline (string_of_int (int_of_float f))
       else
         print_endline (string_of_float f)
   | VString s -> print_endline s
-  | VFun ([x], Lam (y, Var vname), _) when vname = x -> print_endline "true"
-  | VFun ([x], Lam (y, Var vname), _) when vname = y -> print_endline "false"
+  | VBool true -> print_endline "true"
+  | VBool false -> print_endline "false"
   | VTailCall _ -> print_endline "<tailcall>"
   | VRecFun _ | _ -> print_endline "<fun>"
 
-(* Special handling for Church-encoded boolean functions *)
+(* Boolean primitives using native VBool *)
 let create_church_booleans env =
-  let true_fn = VFun (["x"; "y"], Var "x", env) in
-  let false_fn = VFun (["x"; "y"], Var "y", env) in
-  let if_fn = VFun (["c"; "t"; "e"], App (App (Var "c", Var "t"), Var "e"), env) in
-
-  let env_with_primitives = env
-    |> StringMap.add "true" true_fn
-    |> StringMap.add "false" false_fn
-    |> StringMap.add "if" if_fn
+  let expect_bool name = function
+    | VBool b -> b
+    | _ -> raise (RuntimeError (name ^ ": expected boolean"))
   in
-
-  let not_fn = VFun (["b"], App (App (App (Var "if", Var "b"), Var "false"), Var "true"), env_with_primitives) in
-  let and_fn = VFun (["p"; "q"], App (App (App (Var "if", Var "p"), Var "q"), Var "false"), env_with_primitives) in
-  let or_fn = VFun (["p"; "q"], App (App (App (Var "if", Var "p"), Var "true"), Var "q"), env_with_primitives) in
-
-  let final_env = env_with_primitives
-    |> StringMap.add "not" not_fn
-    |> StringMap.add "and" and_fn
-    |> StringMap.add "or" or_fn
-  in
-  final_env
+  let not_fn = VPrim (fun args -> VBool (not (expect_bool "not" (List.hd args)))) in
+  let and_fn = VPrim (fun args ->
+    let p = expect_bool "and" (List.hd args) in
+    VPrim (fun args -> VBool (p && expect_bool "and" (List.hd args)))) in
+  let or_fn = VPrim (fun args ->
+    let p = expect_bool "or" (List.hd args) in
+    VPrim (fun args -> VBool (p || expect_bool "or" (List.hd args)))) in
+  let if_fn = VPrim (fun args ->
+    let c = expect_bool "if" (List.hd args) in
+    VPrim (fun args ->
+      let t = List.hd args in
+      VPrim (fun args ->
+        let f = List.hd args in
+        if c then t else f))) in
+  env
+  |> StringMap.add "true" (VBool true)
+  |> StringMap.add "false" (VBool false)
+  |> StringMap.add "not" not_fn
+  |> StringMap.add "and" and_fn
+  |> StringMap.add "or" or_fn
+  |> StringMap.add "if" if_fn
 
 (* Helper for binary numeric operations with type coercion *)
 let eval_numeric_binop va vb int_op long_op float_op name =
@@ -167,6 +172,7 @@ let rec eval_with_imports env expr =
   | Lng n -> (env, VLong n)
   | Float f -> (env, VFloat f)
   | Str s -> (env, VString s)
+  | Bool b -> (env, VBool b)
   | Add (a, b) -> eval_binop env a b ( + ) Int64.add ( +. ) "add"
   | Sub (a, b) -> eval_binop env a b ( - ) Int64.sub ( -. ) "sub"
   | Mul (a, b) -> eval_binop env a b ( * ) Int64.mul ( *. ) "mul"
@@ -181,11 +187,10 @@ let rec eval_with_imports env expr =
         | VInt x, VInt y -> x = y
         | VLong x, VLong y -> x = y
         | VString x, VString y -> x = y
+        | VBool x, VBool y -> x = y
         | _ -> false
       in
-      (env'', VFun (["t"; "f"],
-                     (if result then Var "t" else Var "f"),
-                     env''))
+      (env'', VBool result)
   | Var x ->
       (try (env, StringMap.find x env)
        with Not_found -> raise (RuntimeError ("Unbound variable: " ^ x)))
@@ -214,6 +219,10 @@ let rec eval_with_imports env expr =
              (* Tail call: defer body evaluation *)
              VTailCall (closure', body)
            else VFun (xs, body, closure')
+       | VBool b ->
+           (* Booleans are applicable: true t f = t, false t f = f *)
+           let first_arg = va in
+           VPrim (fun args -> if b then first_arg else List.hd args)
        | VPrim fn -> fn [va]
        | _ -> raise (RuntimeError "Attempt to call a non-function"))
   | Let (name, _, value) ->
