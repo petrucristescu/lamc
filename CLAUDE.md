@@ -35,7 +35,7 @@ docker build -t lamc-test .     # first time only (installs OCaml + dune)
 ./run-tests.sh 12_lambda        # run a single test by name
 ```
 
-This replicates the GitHub Actions CI (ubuntu:22.04, opam 2.1.5, OCaml 5.1.1, dune 3.8).
+This closely replicates the GitHub Actions CI (ubuntu:22.04, opam 2.1.5, OCaml 5.1.1, dune >= 3.8).
 
 The script mounts the local source as a volume, so file changes are picked up without rebuilding the image.
 
