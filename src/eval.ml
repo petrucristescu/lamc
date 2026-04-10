@@ -320,9 +320,9 @@ let eval_program exprs =
     | _ -> ()
   with
   | RuntimeError msg ->
-      print_endline ("\nLMC Error: " ^ msg);
+      print_endline ("\nChuring Error: " ^ msg);
       (* Don't re-raise the exception, just gracefully terminate *)
       ()
   | Division_by_zero ->
-      print_endline "\nLMC Error: Division by zero"
+      print_endline "\nChuring Error: Division by zero"
       (* Don't re-raise the exception, just gracefully terminate *)
