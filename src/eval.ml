@@ -95,6 +95,34 @@ let create_church_booleans env =
   in
   final_env
 
+(* Helper for binary numeric operations with type coercion *)
+let eval_numeric_binop va vb int_op long_op float_op name =
+  match va, vb with
+  | VInt x, VInt y -> VInt (int_op x y)
+  | VLong x, VLong y -> VLong (long_op x y)
+  | VInt x, VLong y -> VLong (long_op (Int64.of_int x) y)
+  | VLong x, VInt y -> VLong (long_op x (Int64.of_int y))
+  | VFloat x, VFloat y -> VFloat (float_op x y)
+  | VInt x, VFloat y -> VFloat (float_op (float_of_int x) y)
+  | VFloat x, VInt y -> VFloat (float_op x (float_of_int y))
+  | _ -> raise (RuntimeError ("Type error in " ^ name))
+
+let eval_div_values va vb =
+  let check_zero_int y = if y = 0 then raise (RuntimeError "Division by zero") in
+  let check_zero_long y = if y = 0L then raise (RuntimeError "Division by zero") in
+  let check_zero_float y = if y = 0.0 then raise (RuntimeError "Division by zero") in
+  match va, vb with
+  | VInt _, VInt 0 | VInt _, VLong 0L -> raise (RuntimeError "Division by zero")
+  | VLong _, VInt 0 | VLong _, VLong 0L -> raise (RuntimeError "Division by zero")
+  | VInt x, VInt y -> check_zero_int y; VFloat (float_of_int x /. float_of_int y)
+  | VLong x, VLong y -> check_zero_long y; VFloat (Int64.to_float x /. Int64.to_float y)
+  | VInt x, VLong y -> check_zero_long y; VFloat (float_of_int x /. Int64.to_float y)
+  | VLong x, VInt y -> check_zero_int y; VFloat (Int64.to_float x /. float_of_int y)
+  | VFloat x, VFloat y -> check_zero_float y; VFloat (x /. y)
+  | VInt x, VFloat y -> check_zero_float y; VFloat (float_of_int x /. y)
+  | VFloat x, VInt y -> check_zero_int y; VFloat (x /. float_of_int y)
+  | _ -> raise (RuntimeError "Type error in div")
+
 (* Define an eval_with_imports function to handle environment properly *)
 (* eval_with_imports and force are mutually recursive for tail call optimization *)
 let rec eval_with_imports env expr =
@@ -139,75 +167,10 @@ let rec eval_with_imports env expr =
   | Lng n -> (env, VLong n)
   | Float f -> (env, VFloat f)
   | Str s -> (env, VString s)
-  | Add (a, b) ->
-      let (env', va) = eval_with_imports env a in
-      let va = force va in
-      let (env'', vb) = eval_with_imports env' b in
-      let vb = force vb in
-      (env'',
-       match va, vb with
-       | VInt x, VInt y -> VInt (x + y)
-       | VLong x, VLong y -> VLong (Int64.add x y)
-       | VInt x, VLong y -> VLong (Int64.add (Int64.of_int x) y)
-       | VLong x, VInt y -> VLong (Int64.add x (Int64.of_int y))
-       | VFloat x, VFloat y -> VFloat (x +. y)
-       | VInt x, VFloat y -> VFloat ((float_of_int x) +. y)
-       | VFloat x, VInt y -> VFloat (x +. (float_of_int y))
-       | _ -> raise (RuntimeError "Type error in add"))
-  | Sub (a, b) ->
-      let (env', va) = eval_with_imports env a in
-      let va = force va in
-      let (env'', vb) = eval_with_imports env' b in
-      let vb = force vb in
-      (env'',
-       match va, vb with
-       | VInt x, VInt y -> VInt (x - y)
-       | VLong x, VLong y -> VLong (Int64.sub x y)
-       | VInt x, VLong y -> VLong (Int64.sub (Int64.of_int x) y)
-       | VLong x, VInt y -> VLong (Int64.sub x (Int64.of_int y))
-       | VFloat x, VFloat y -> VFloat (x -. y)
-       | VInt x, VFloat y -> VFloat ((float_of_int x) -. y)
-       | VFloat x, VInt y -> VFloat (x -. (float_of_int y))
-       | _ -> raise (RuntimeError "Type error in sub"))
-  | Mul (a, b) ->
-      let (env', va) = eval_with_imports env a in
-      let va = force va in
-      let (env'', vb) = eval_with_imports env' b in
-      let vb = force vb in
-      (env'',
-       match va, vb with
-       | VInt x, VInt y -> VInt (x * y)
-       | VLong x, VLong y -> VLong (Int64.mul x y)
-       | VInt x, VLong y -> VLong (Int64.mul (Int64.of_int x) y)
-       | VLong x, VInt y -> VLong (Int64.mul x (Int64.of_int y))
-       | VFloat x, VFloat y -> VFloat (x *. y)
-       | VInt x, VFloat y -> VFloat ((float_of_int x) *. y)
-       | VFloat x, VInt y -> VFloat (x *. (float_of_int y))
-       | _ -> raise (RuntimeError "Type error in mul"))
-  | Div (a, b) ->
-      let (env', va) = eval_with_imports env a in
-      let va = force va in
-      let (env'', vb) = eval_with_imports env' b in
-      let vb = force vb in
-      (env'',
-       match va, vb with
-       | _, VInt 0 -> raise (RuntimeError "Division by zero")
-       | _, VLong 0L -> raise (RuntimeError "Division by zero")
-       | VInt x, VInt y ->
-         if y = 0 then raise (RuntimeError "Division by zero") else VFloat ((float_of_int x) /. (float_of_int y))
-       | VLong x, VLong y ->
-         if y = 0L then raise (RuntimeError "Division by zero") else VFloat (Int64.to_float x /. Int64.to_float y)
-       | VInt x, VLong y ->
-         if y = 0L then raise (RuntimeError "Division by zero") else VFloat ((float_of_int x) /. Int64.to_float y)
-       | VLong x, VInt y ->
-         if y = 0 then raise (RuntimeError "Division by zero") else VFloat (Int64.to_float x /. (float_of_int y))
-       | VFloat x, VFloat y ->
-         if y = 0.0 then raise (RuntimeError "Division by zero") else VFloat (x /. y)
-       | VInt x, VFloat y ->
-         if y = 0.0 then raise (RuntimeError "Division by zero") else VFloat ((float_of_int x) /. y)
-       | VFloat x, VInt y ->
-         if float_of_int y = 0.0 then raise (RuntimeError "Division by zero") else VFloat (x /. (float_of_int y))
-       | _ -> raise (RuntimeError "Type error in div"))
+  | Add (a, b) -> eval_binop env a b ( + ) Int64.add ( +. ) "add"
+  | Sub (a, b) -> eval_binop env a b ( - ) Int64.sub ( -. ) "sub"
+  | Mul (a, b) -> eval_binop env a b ( * ) Int64.mul ( *. ) "mul"
+  | Div (a, b) -> eval_div env a b
   | Eq (a, b) ->
       let (env', va) = eval_with_imports env a in
       let va = force va in
@@ -283,6 +246,20 @@ let rec eval_with_imports env expr =
 
 (* Trampoline: resolve VTailCall chains without growing the stack.
    force is tail-recursive, so OCaml optimizes it into a loop. *)
+and eval_binop env a b int_op long_op float_op name =
+  let (env', va) = eval_with_imports env a in
+  let va = force va in
+  let (env'', vb) = eval_with_imports env' b in
+  let vb = force vb in
+  (env'', eval_numeric_binop va vb int_op long_op float_op name)
+
+and eval_div env a b =
+  let (env', va) = eval_with_imports env a in
+  let va = force va in
+  let (env'', vb) = eval_with_imports env' b in
+  let vb = force vb in
+  (env'', eval_div_values va vb)
+
 and force = function
   | VTailCall (tc_env, tc_expr) ->
       force (snd (eval_with_imports tc_env tc_expr))
