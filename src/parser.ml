@@ -233,21 +233,32 @@ and parse_var_def tokens =
   | _ -> parse_add tokens
 
 and parse_add tokens =
+  let rec aux acc toks =
+    match toks with
+    | (Plus, _, _) :: rest' ->
+        let rhs, rest'' = parse_mul rest' in
+        aux (Add (acc, rhs)) rest''
+    | (Minus, _, _) :: rest' ->
+        let rhs, rest'' = parse_mul rest' in
+        aux (Sub (acc, rhs)) rest''
+    | _ -> (acc, toks)
+  in
+  let lhs, rest = parse_mul tokens in
+  aux lhs rest
+
+and parse_mul tokens =
+  let rec aux acc toks =
+    match toks with
+    | (Multiply, _, _) :: rest' ->
+        let rhs, rest'' = parse_app rest' in
+        aux (Mul (acc, rhs)) rest''
+    | (Divide, _, _) :: rest' ->
+        let rhs, rest'' = parse_app rest' in
+        aux (Div (acc, rhs)) rest''
+    | _ -> (acc, toks)
+  in
   let lhs, rest = parse_app tokens in
-  match rest with
-  | (Plus, _, _) :: rest' ->
-      let rhs, rest'' = parse_add rest' in
-      (Add (lhs, rhs), rest'')
-  | (Minus, _, _) :: rest' ->
-      let rhs, rest'' = parse_add rest' in
-      (Sub (lhs, rhs), rest'')
-  | (Multiply, _, _) :: rest' ->
-      let rhs, rest'' = parse_add rest' in
-      (Mul (lhs, rhs), rest'')
-  | (Divide, _, _) :: rest' ->
-      let rhs, rest'' = parse_add rest' in
-      (Div (lhs, rhs), rest'')
-  | _ -> (lhs, rest)
+  aux lhs rest
 
 and parse_app tokens =
   let rec aux acc toks =
