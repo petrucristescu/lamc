@@ -11,18 +11,20 @@ if [ -z "$TEST_NAME" ]; then
   MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd):/app" lamc-test
 else
   MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd):/app" lamc-test bash -c "
+    test_name=\"\$1\" &&
     eval \$(opam env) && dune build src/lmc.exe && mkdir -p test_results &&
-    test_file=\"src/test/${TEST_NAME}.lmc\" &&
-    expected=\"src/test/${TEST_NAME}.lmc.out\" &&
+    test_file=\"src/test/\${test_name}.lmc\" &&
+    expected=\"src/test/\${test_name}.lmc.out\" &&
+    output_file=\"test_results/\${test_name}.out\" &&
     if [ ! -f \"\$test_file\" ]; then echo \"Test not found: \$test_file\"; exit 1; fi &&
-    _build/default/src/lmc.exe \"\$test_file\" > \"test_results/${TEST_NAME}.out\" 2>&1 &&
+    _build/default/src/lmc.exe \"\$test_file\" > \"\$output_file\" 2>&1 &&
     echo '--- Output ---' &&
-    cat \"test_results/${TEST_NAME}.out\" &&
+    cat \"\$output_file\" &&
     echo '--- Result ---' &&
-    if diff -u \"test_results/${TEST_NAME}.out\" \"\$expected\"; then
-      echo \"PASS: ${TEST_NAME}\"
+    if diff -u \"\$output_file\" \"\$expected\"; then
+      echo \"PASS: \$test_name\"
     else
-      echo \"FAIL: ${TEST_NAME}\"; exit 1
+      echo \"FAIL: \$test_name\"; exit 1
     fi
-  "
+  " _ "$TEST_NAME"
 fi
