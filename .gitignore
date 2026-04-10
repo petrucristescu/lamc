@@ -1,2 +1,4 @@
 .idea
 _build
+.claude
+test_results
