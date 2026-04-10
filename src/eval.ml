@@ -300,6 +300,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env =
       env
 
 let eval_program exprs =
+  imported_libraries := StringMap.empty;
   try
     let env = List.fold_left eval_toplevel StringMap.empty exprs in
     match StringMap.find_opt "main" env with
