@@ -1,0 +1,37 @@
+# Test lambda expressions (|>param. body)
+
+# Identity lambda
+~identity x ((|>a. a) x)
+
+# Lambda that adds 1
+~inc x ((|>a. a + 1) x)
+
+# Lambda that doubles
+~double x ((|>a. a * 2) x)
+
+# Nested lambdas (curried addition)
+~curried_add x,y ((|>a. |>b. a + b) x y)
+
+# Lambda as argument to a higher-order function
+~apply f,x (f x)
+
+# Compose two functions
+~compose f,g,x (f (g x))
+
+~(
+    # Basic lambda application
+    print (identity 42)
+    print (inc 9)
+    print (double 5)
+
+    # Nested lambdas
+    print (curried_add 3 4)
+
+    # Passing lambda as argument
+    print (apply (|>n. n + 100) 5)
+    print (apply (|>n. n * 3) 7)
+
+    # Composing lambdas
+    print (compose (|>x. x + 1) (|>x. x * 10) 3)
+    print (compose (|>x. x * 2) (|>x. x + 5) 10)
+)
