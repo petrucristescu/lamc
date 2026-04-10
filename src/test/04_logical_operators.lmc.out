@@ -1,4 +1,3 @@
-Type error: Cannot unify types: Bool and (String -> 'a3)
 no
 yes
 no

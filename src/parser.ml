@@ -372,8 +372,8 @@ let parse_and_infer ?(show_types=true) input =
             Printf.printf "Expr: %s\nType: %s\n\n" (Ast.string_of_expr expr) (string_of_typ typ);
           let env' =
             match expr with
-            | Let (name, _, _) -> Types.StringMap.add name typ env
-            | FunDef (name, _, _) -> Types.StringMap.add name typ env
+            | Let (name, _, _) -> Types.StringMap.add name (Types.Forall ([], typ)) env
+            | FunDef (name, _, _) -> Types.StringMap.add name (Types.Forall ([], typ)) env
             | _ -> env
           in
           infer_toplevel env' rest
