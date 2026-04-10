@@ -18,6 +18,7 @@ let compose s1 s2 =
   List.map (fun (v, t) -> (v, apply s1 t)) s2 @ s1
 
 let counter = ref 0
+let reset_counter () = counter := 0
 let fresh_var () =
   let v = Printf.sprintf "a%d" !counter in
   incr counter; TVar v

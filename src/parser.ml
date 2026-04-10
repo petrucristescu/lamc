@@ -360,6 +360,7 @@ let string_of_typ t =
   in aux t
 
 let parse_and_infer ?(show_types=true) input =
+  Infer.reset_counter ();
   let exprs = parse input in
   let env = Infer.add_operators_to_env Types.StringMap.empty in
   let rec infer_toplevel env = function
