@@ -3,6 +3,7 @@ type expr =
   | Lng of int64
   | Float of float
   | Str of string
+  | Bool of bool
   | Add of expr * expr
   | Sub of expr * expr
   | Mul of expr * expr
@@ -31,6 +32,7 @@ let rec string_of_expr = function
   | Int n -> string_of_int n
   | Lng n -> Int64.to_string n
   | Float f -> string_of_float f
+  | Bool b -> string_of_bool b
   | Eq (a, b) -> "(" ^ string_of_expr a ^ " == " ^ string_of_expr b ^ ")"
   | Add (a, b) -> "(" ^ string_of_expr a ^ " + " ^ string_of_expr b ^ ")"
   | Sub (a, b) -> "(" ^ string_of_expr a ^ " - " ^ string_of_expr b ^ ")"

@@ -100,6 +100,7 @@ let rec infer env = function
   | Lng _ -> ([], TLong)
   | Float _ -> ([], TFloat)
   | Str _ -> ([], TString)
+  | Bool _ -> ([], TBool)
   | Add (a, b) | Sub (a, b) | Mul(a, b) ->
       let s1, t1 = infer env a in
       let s2, t2 = infer (StringMap.map (apply s1) env) b in
