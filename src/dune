@@ -1,4 +1,11 @@
+(library
+ (name churing_lib)
+ (modules parser eval ast types infer)
+ (wrapped false)
+ (flags (:standard -w -27)))
+
 (executable
- (name lmc)
- (modules lmc parser eval ast types infer)
+ (name churing)
+ (modules churing)
+ (libraries churing_lib)
  (flags (:standard -w -27)))

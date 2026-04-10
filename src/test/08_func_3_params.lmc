@@ -1,9 +1,0 @@
-@i_v1 11
-
-~add x,y,z (
-    x + y + z
-)
-
-~(
-    print add 1 2 v1
-)

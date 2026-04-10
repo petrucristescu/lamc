@@ -24,7 +24,7 @@ WORKDIR /app
 # Set OPAMROOT explicitly so opam works even when HOME is overridden at runtime
 ENV OPAMROOT=/home/appuser/.opam
 RUN opam init --disable-sandboxing --no-setup --compiler=ocaml-base-compiler.5.1.1 -y && \
-    opam install dune -y && \
+    opam install dune alcotest -y && \
     chmod -R a+rX /home/appuser/.opam
 
 # Make opam root accessible to any UID (for --user overrides in run-tests.sh)
@@ -36,18 +36,32 @@ COPY <<'EOF' /usr/local/bin/run-tests-in-docker.sh
 set -e
 
 eval "$(opam env)"
-dune build src/lmc.exe
+dune build src/churing.exe
+
+echo "=== OCaml unit tests ==="
+dune runtest 2>&1 || { echo "Unit tests failed!"; exit 1; }
+
+echo "=== Churing integration tests ==="
 mkdir -p test_results
 
 failed=0
-for test_file in src/test/*.lmc; do
-    test_name=$(basename "$test_file" .lmc)
-    expected_output="src/test/${test_name}.lmc.out"
+for test_file in src/test/*.ch; do
+    test_name=$(basename "$test_file" .ch)
+    expected_output="src/test/${test_name}.ch.out"
 
-    _build/default/src/lmc.exe "$test_file" > "test_results/${test_name}.out" 2>&1
+    _build/default/src/churing.exe "$test_file" > "test_results/${test_name}.out" 2>&1
+    exit_code=$?
 
-    if ! diff -u "test_results/${test_name}.out" "$expected_output"; then
-        echo "FAIL: $test_name"
+    if [ -f "$expected_output" ]; then
+        if ! diff -u "test_results/${test_name}.out" "$expected_output"; then
+            echo "FAIL: $test_name"
+            failed=1
+        else
+            echo "PASS: $test_name"
+        fi
+    elif [ "$exit_code" -ne 0 ]; then
+        echo "FAIL: $test_name (exit code $exit_code)"
+        cat "test_results/${test_name}.out"
         failed=1
     else
         echo "PASS: $test_name"

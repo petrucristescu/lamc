@@ -1,0 +1,28 @@
+# Comprehensive Operators Library
+# This file defines all common operators including Church boolean functions
+
+# Church-encoded boolean primitives - these should work fine
+~true x y x                    # Church true: Returns the first argument
+~false x y y                   # Church false: Returns the second argument
+
+# IF-THEN-ELSE construct using primitive if-then-else pattern
+~if x y z x y z                # Apply x to y and z directly
+
+# NOT function defined without referencing other functions
+~not x y z (x z y)             # Flip the arguments to negate
+
+# AND function defined without referencing other functions
+~and x y u v (x (y u v) v)     # If x then apply y, else return false (v)
+
+# OR function defined without referencing other functions
+~or x y u v (x u (y u v))      # If x then return true (u), else apply y
+
+# Basic arithmetic operators
+~add x y x + y                 # Addition operator
+~sub x y x - y                 # Subtraction operator
+~mul x y x * y                 # Multiplication operator
+~div x y x / y                 # Division operator
+
+# Utility functions
+~identity x x                  # Identity function: Returns its argument unchanged
+~const x y x                   # Constant function (same as true)

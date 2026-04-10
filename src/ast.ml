@@ -16,7 +16,8 @@ type expr =
   | FunDef of string * string list * expr
   | Seq of expr * expr
   | Print of expr
-  | Import of string  (* New constructor for importing libraries *)
+  | Assert of expr
+  | Import of string
 
 let rec string_of_typ = function
   | Types.TInt -> "Int"
@@ -48,7 +49,8 @@ let rec string_of_expr = function
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
   | Print e -> "print " ^ string_of_expr e
-  | Import lib -> "import " ^ lib  (* String representation for Import *)
+  | Assert e -> "assert " ^ string_of_expr e
+  | Import lib -> "import " ^ lib
 
 let string_of_exprs exprs =
   String.concat "\n" (List.map string_of_expr exprs)

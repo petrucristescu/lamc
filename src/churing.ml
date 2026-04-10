@@ -10,7 +10,7 @@ let () =
     | _ -> ()
   ) args;
   if !filename = "" then (
-    print_endline "Usage: lmc [--ast] [--types] <file.lmc>";
+    print_endline "Usage: churing [--ast] [--types] <file.ch>";
     exit 1
   );
   let input =
@@ -25,5 +25,8 @@ let () =
     if !show_ast then Ast.print_ast exprs;
     Eval.eval_program exprs
   with
+    | Eval.AssertionFailure msg ->
+      print_endline msg;
+      exit 1
     | Parser.ParseError (msg, line, col) ->
       Printf.printf "Parse error at line %d, col %d: %s\n" line col msg

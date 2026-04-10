@@ -15,6 +15,7 @@ type value =
 and env = value StringMap.t
 
 exception RuntimeError of string
+exception AssertionFailure of string
 
 (* Load and parse a library file *)
 let load_library library_name =
@@ -33,7 +34,7 @@ let load_library library_name =
     match paths with
     | [] -> raise (RuntimeError ("Library not found: " ^ library_name))
     | path :: rest ->
-        let lib_file = Filename.concat path (library_name ^ ".lmc") in
+        let lib_file = Filename.concat path (library_name ^ ".ch") in
         if Sys.file_exists lib_file then
           lib_file
         else
@@ -186,6 +187,8 @@ let rec eval_with_imports env expr =
         match va, vb with
         | VInt x, VInt y -> x = y
         | VLong x, VLong y -> x = y
+        | VInt x, VLong y -> Int64.of_int x = y
+        | VLong x, VInt y -> x = Int64.of_int y
         | VString x, VString y -> x = y
         | VBool x, VBool y -> x = y
         | _ -> false
@@ -252,6 +255,15 @@ let rec eval_with_imports env expr =
             v
       in
       (env', result)
+  | Assert e ->
+      let (env', v) = eval_with_imports env e in
+      let v = force v in
+      (match v with
+       | VBool true -> (env', VBool true)
+       | VBool false ->
+           raise (AssertionFailure ("Assertion failed: " ^ Ast.string_of_expr e))
+       | _ ->
+           raise (AssertionFailure ("Assert requires a boolean, got: " ^ Ast.string_of_expr e)))
 
 (* Trampoline: resolve VTailCall chains without growing the stack.
    force is tail-recursive, so OCaml optimizes it into a loop. *)

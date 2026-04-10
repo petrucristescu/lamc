@@ -299,6 +299,9 @@ and parse_primary tokens =
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr (skip_newlines rest) in
       (Print arg, rest')
+  | (Ident "assert", _, _) :: rest ->
+      let arg, rest' = parse_expr (skip_newlines rest) in
+      (Assert arg, rest')
   | (Ident "eq", _, _) :: rest ->
       let a, rest' = parse_primary (skip_newlines rest) in
       let b, rest'' = parse_primary (skip_newlines rest') in

@@ -1,11 +1,11 @@
 #!/bin/bash
-# Run an LMC file locally using Docker (no OCaml needed on host)
-# Usage: ./run.sh example.lmc
+# Run a Churing file locally using Docker (no OCaml needed on host)
+# Usage: ./run.sh example.ch
 
 FILE="$1"
 
 if [ -z "$FILE" ]; then
-  echo "Usage: ./run.sh <file.lmc>"
+  echo "Usage: ./run.sh <file.ch>"
   exit 1
 fi
 
@@ -14,7 +14,7 @@ if [ ! -f "$FILE" ]; then
   exit 1
 fi
 
-MSYS_NO_PATHCONV=1 docker run --rm --user root -e OPAMROOTISOK=1 -v "$(pwd):/app" lamc-test bash -c "
-  eval \$(opam env) && dune build src/lmc.exe &&
-  _build/default/src/lmc.exe \"\$1\"
+MSYS_NO_PATHCONV=1 docker run --rm --user root -e OPAMROOTISOK=1 -v "$(pwd):/app" churing-test bash -c "
+  eval \$(opam env) && dune build src/churing.exe &&
+  _build/default/src/churing.exe \"\$1\"
 " _ "$FILE"

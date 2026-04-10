@@ -1,28 +1,24 @@
 # Test tail call optimization
 # Tail-recursive functions should not overflow the stack with large inputs
 
-# Tail-recursive sum with accumulator
 ~sum_tail n,acc (
     (eq n 0 (|>_. acc) (|>_. sum_tail (n - 1) (acc + n))) 0
 )
 
-# Tail-recursive factorial with accumulator
 ~fact_tail n,acc (
     (eq n 0 (|>_. acc) (|>_. fact_tail (n - 1) (acc * n))) 0
 )
 
-# Tail-recursive countdown (just to test deep recursion without overflow)
 ~countdown n (
     (eq n 0 (|>_. 0) (|>_. countdown (n - 1))) 0
 )
 
 ~(
-    # Basic correctness
-    print (sum_tail 10 0)
-    print (fact_tail 5 1)
-    print (fact_tail 10 1)
+    assert (eq (sum_tail 10 0) 55)
+    assert (eq (fact_tail 5 1) 120)
+    assert (eq (fact_tail 10 1) 3628800)
 
     # Deep recursion - would stack overflow without TCO
-    print (countdown 100000)
-    print (sum_tail 100000 0)
+    assert (eq (countdown 100000) 0)
+    assert (eq (sum_tail 100000 0) 5000050000L)
 )

@@ -188,5 +188,9 @@ let rec infer env = function
   | Print e ->
       let s1, t1 = infer env e in
       (s1, t1)
+  | Assert e ->
+      let s1, t1 = infer env e in
+      let s2 = unify (apply s1 t1) TBool in
+      (compose s2 s1, TBool)
   | Import _ ->
       ([], TInt)
