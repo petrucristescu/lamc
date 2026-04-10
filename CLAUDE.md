@@ -30,13 +30,14 @@ import "lib"                 # Import library
 No OCaml installed locally. Use Docker:
 
 ```bash
-docker build -t lamc-test .
-docker run --rm lamc-test
+docker build -t lamc-test .     # first time only (installs OCaml + dune)
+./run-tests.sh                  # run all tests
+./run-tests.sh 12_lambda        # run a single test by name
 ```
 
 This replicates the GitHub Actions CI (ubuntu:22.04, opam 2.1.5, OCaml 5.1.1, dune 3.8).
 
-Build only: `eval $(opam env) && dune build src/lmc.exe`
+The script mounts the local source as a volume, so file changes are picked up without rebuilding the image.
 
 ## Testing Conventions
 

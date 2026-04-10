@@ -34,4 +34,6 @@
     # Composing lambdas
     print (compose (|>x. x + 1) (|>x. x * 10) 3)
     print (compose (|>x. x * 2) (|>x. x + 5) 10)
+
+    print (compose (|>x. x * 4) (|>x. x + 10) 10)
 )
