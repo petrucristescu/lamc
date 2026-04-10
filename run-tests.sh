@@ -8,9 +8,9 @@ TEST_NAME="$1"
 
 # MSYS_NO_PATHCONV prevents Git Bash on Windows from mangling /app paths
 if [ -z "$TEST_NAME" ]; then
-  MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd):/app" lamc-test
+  MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/app" lamc-test
 else
-  MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd):/app" lamc-test bash -c "
+  MSYS_NO_PATHCONV=1 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$(pwd):/app" lamc-test bash -c "
     test_name=\"\$1\" &&
     eval \$(opam env) && dune build src/lmc.exe && mkdir -p test_results &&
     test_file=\"src/test/\${test_name}.lmc\" &&
