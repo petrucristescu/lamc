@@ -36,4 +36,6 @@
     print (compose (|>x. x * 2) (|>x. x + 5) 10)
 
     print (compose (|>x. x * 4) (|>x. x + 10) 10)
+
+    print ((|>x. x * 5) 5)
 )

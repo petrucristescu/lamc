@@ -16,6 +16,9 @@ else
     expected=\"src/test/${TEST_NAME}.lmc.out\" &&
     if [ ! -f \"\$test_file\" ]; then echo \"Test not found: \$test_file\"; exit 1; fi &&
     _build/default/src/lmc.exe \"\$test_file\" > \"test_results/${TEST_NAME}.out\" 2>&1 &&
+    echo '--- Output ---' &&
+    cat \"test_results/${TEST_NAME}.out\" &&
+    echo '--- Result ---' &&
     if diff -u \"test_results/${TEST_NAME}.out\" \"\$expected\"; then
       echo \"PASS: ${TEST_NAME}\"
     else
