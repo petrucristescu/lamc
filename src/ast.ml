@@ -19,6 +19,7 @@ type expr =
   | Assert of expr
   | List of expr list
   | Match of expr * (pattern * expr) list
+  | Try of expr * expr
   | Import of string
 
 and pattern =
@@ -67,6 +68,7 @@ let rec string_of_expr = function
       "match " ^ string_of_expr e ^ " " ^
       String.concat " " (List.map (fun (p, body) ->
         "| " ^ string_of_pattern p ^ " -> " ^ string_of_expr body) arms)
+  | Try (e, handler) -> "try " ^ string_of_expr e ^ " " ^ string_of_expr handler
   | Import lib -> "import " ^ lib
 
 and string_of_pattern = function

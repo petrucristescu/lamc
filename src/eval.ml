@@ -643,6 +643,23 @@ let rec eval_with_imports env expr =
              | None -> try_arms rest)
       in
       try_arms arms
+  | Try (expr, handler) ->
+      (try
+        let (env', v) = eval_with_imports env expr in
+        (env', force v)
+      with
+      | RuntimeError msg ->
+          let (_, hv) = eval_with_imports env handler in
+          let hv = force hv in
+          (env, apply_fn hv (VString msg))
+      | AssertionFailure msg ->
+          let (_, hv) = eval_with_imports env handler in
+          let hv = force hv in
+          (env, apply_fn hv (VString msg))
+      | Division_by_zero ->
+          let (_, hv) = eval_with_imports env handler in
+          let hv = force hv in
+          (env, apply_fn hv (VString "Division by zero")))
 
 (* Trampoline: resolve VTailCall chains without growing the stack.
    force is tail-recursive, so OCaml optimizes it into a loop. *)
