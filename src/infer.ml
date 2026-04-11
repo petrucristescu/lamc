@@ -103,6 +103,42 @@ let add_operators_to_env env =
 
   let t_or = TFun (t_bool, TFun (t_bool, t_bool)) in
   let env = StringMap.add "or" (mono t_or) env in
+
+  (* Math functions *)
+  let t_float_float = TFun (TFloat, TFloat) in
+  let t_float_int = TFun (TFloat, TInt) in
+  let t_float_float_float = TFun (TFloat, TFun (TFloat, TFloat)) in
+  let env = StringMap.add "sqrt" (mono t_float_float) env in
+  let env = StringMap.add "sin" (mono t_float_float) env in
+  let env = StringMap.add "cos" (mono t_float_float) env in
+  let env = StringMap.add "tan" (mono t_float_float) env in
+  let env = StringMap.add "asin" (mono t_float_float) env in
+  let env = StringMap.add "acos" (mono t_float_float) env in
+  let env = StringMap.add "atan" (mono t_float_float) env in
+  let env = StringMap.add "floor" (mono t_float_int) env in
+  let env = StringMap.add "ceil" (mono t_float_int) env in
+  let env = StringMap.add "round" (mono t_float_int) env in
+  let env = StringMap.add "abs" (mono t_float_float) env in
+  let env = StringMap.add "pow" (mono t_float_float_float) env in
+  let env = StringMap.add "min" (mono t_float_float_float) env in
+  let env = StringMap.add "max" (mono t_float_float_float) env in
+
+  (* String functions *)
+  let t_str = TString in
+  let t_int = TInt in
+  let env = StringMap.add "length" (mono (TFun (t_str, t_int))) env in
+  let env = StringMap.add "concat" (mono (TFun (t_str, TFun (t_str, t_str)))) env in
+  let env = StringMap.add "substring" (mono (TFun (t_str, TFun (t_int, TFun (t_int, t_str))))) env in
+  let env = StringMap.add "uppercase" (mono (TFun (t_str, t_str))) env in
+  let env = StringMap.add "lowercase" (mono (TFun (t_str, t_str))) env in
+  let env = StringMap.add "trim" (mono (TFun (t_str, t_str))) env in
+  let env = StringMap.add "charAt" (mono (TFun (t_str, TFun (t_int, t_str)))) env in
+  let env = StringMap.add "indexOf" (mono (TFun (t_str, TFun (t_str, t_int)))) env in
+  let env = StringMap.add "startsWith" (mono (TFun (t_str, TFun (t_str, t_bool)))) env in
+  let env = StringMap.add "endsWith" (mono (TFun (t_str, TFun (t_str, t_bool)))) env in
+  let env = StringMap.add "replace" (mono (TFun (t_str, TFun (t_str, TFun (t_str, t_str))))) env in
+  let a = fresh_var () in
+  let env = StringMap.add "toString" (mono (TFun (a, t_str))) env in
   env
 
 let rec infer env = function

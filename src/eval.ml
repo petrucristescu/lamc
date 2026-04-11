@@ -101,6 +101,140 @@ let create_church_booleans env =
   |> StringMap.add "or" or_fn
   |> StringMap.add "if" if_fn
 
+(* Math primitives *)
+let create_math_functions env =
+  let expect_numeric name = function
+    | VInt n -> float_of_int n
+    | VLong n -> Int64.to_float n
+    | VFloat f -> f
+    | _ -> raise (RuntimeError (name ^ ": expected numeric"))
+  in
+  let math1 name f = VPrim (fun args -> VFloat (f (expect_numeric name (List.hd args)))) in
+  let math2 name f = VPrim (fun args ->
+    let a = expect_numeric name (List.hd args) in
+    VPrim (fun args -> VFloat (f a (expect_numeric name (List.hd args))))) in
+  env
+  |> StringMap.add "sqrt" (math1 "sqrt" Float.sqrt)
+  |> StringMap.add "sin" (math1 "sin" Float.sin)
+  |> StringMap.add "cos" (math1 "cos" Float.cos)
+  |> StringMap.add "tan" (math1 "tan" Float.tan)
+  |> StringMap.add "asin" (math1 "asin" Float.asin)
+  |> StringMap.add "acos" (math1 "acos" Float.acos)
+  |> StringMap.add "atan" (math1 "atan" Float.atan)
+  |> StringMap.add "floor" (VPrim (fun args ->
+      VInt (int_of_float (Float.floor (expect_numeric "floor" (List.hd args))))))
+  |> StringMap.add "ceil" (VPrim (fun args ->
+      VInt (int_of_float (Float.ceil (expect_numeric "ceil" (List.hd args))))))
+  |> StringMap.add "round" (VPrim (fun args ->
+      VInt (int_of_float (Float.round (expect_numeric "round" (List.hd args))))))
+  |> StringMap.add "abs" (VPrim (fun args ->
+      match List.hd args with
+      | VInt n -> VInt (abs n)
+      | VLong n -> VLong (Int64.abs n)
+      | VFloat f -> VFloat (Float.abs f)
+      | _ -> raise (RuntimeError "abs: expected numeric")))
+  |> StringMap.add "pow" (math2 "pow" Float.pow)
+  |> StringMap.add "min" (VPrim (fun args ->
+      let a = expect_numeric "min" (List.hd args) in
+      VPrim (fun args -> VFloat (Float.min a (expect_numeric "min" (List.hd args))))))
+  |> StringMap.add "max" (VPrim (fun args ->
+      let a = expect_numeric "max" (List.hd args) in
+      VPrim (fun args -> VFloat (Float.max a (expect_numeric "max" (List.hd args))))))
+
+(* String primitives *)
+let create_string_functions env =
+  let expect_string name = function
+    | VString s -> s
+    | _ -> raise (RuntimeError (name ^ ": expected string"))
+  in
+  let expect_int name = function
+    | VInt n -> n
+    | _ -> raise (RuntimeError (name ^ ": expected int"))
+  in
+  env
+  |> StringMap.add "length" (VPrim (fun args ->
+      VInt (String.length (expect_string "length" (List.hd args)))))
+  |> StringMap.add "concat" (VPrim (fun args ->
+      let s1 = expect_string "concat" (List.hd args) in
+      VPrim (fun args -> VString (s1 ^ expect_string "concat" (List.hd args)))))
+  |> StringMap.add "substring" (VPrim (fun args ->
+      let s = expect_string "substring" (List.hd args) in
+      VPrim (fun args ->
+        let start = expect_int "substring" (List.hd args) in
+        VPrim (fun args ->
+          let len = expect_int "substring" (List.hd args) in
+          if start < 0 || start + len > String.length s then
+            raise (RuntimeError "substring: index out of bounds")
+          else VString (String.sub s start len)))))
+  |> StringMap.add "uppercase" (VPrim (fun args ->
+      VString (String.uppercase_ascii (expect_string "uppercase" (List.hd args)))))
+  |> StringMap.add "lowercase" (VPrim (fun args ->
+      VString (String.lowercase_ascii (expect_string "lowercase" (List.hd args)))))
+  |> StringMap.add "trim" (VPrim (fun args ->
+      VString (String.trim (expect_string "trim" (List.hd args)))))
+  |> StringMap.add "charAt" (VPrim (fun args ->
+      let s = expect_string "charAt" (List.hd args) in
+      VPrim (fun args ->
+        let i = expect_int "charAt" (List.hd args) in
+        if i < 0 || i >= String.length s then
+          raise (RuntimeError "charAt: index out of bounds")
+        else VString (String.make 1 s.[i]))))
+  |> StringMap.add "indexOf" (VPrim (fun args ->
+      let haystack = expect_string "indexOf" (List.hd args) in
+      VPrim (fun args ->
+        let needle = expect_string "indexOf" (List.hd args) in
+        let len_h = String.length haystack in
+        let len_n = String.length needle in
+        let rec search i =
+          if i > len_h - len_n then VInt (-1)
+          else if String.sub haystack i len_n = needle then VInt i
+          else search (i + 1)
+        in
+        if len_n = 0 then VInt 0
+        else if len_n > len_h then VInt (-1)
+        else search 0)))
+  |> StringMap.add "startsWith" (VPrim (fun args ->
+      let s = expect_string "startsWith" (List.hd args) in
+      VPrim (fun args ->
+        let prefix = expect_string "startsWith" (List.hd args) in
+        let len = String.length prefix in
+        VBool (len <= String.length s && String.sub s 0 len = prefix))))
+  |> StringMap.add "endsWith" (VPrim (fun args ->
+      let s = expect_string "endsWith" (List.hd args) in
+      VPrim (fun args ->
+        let suffix = expect_string "endsWith" (List.hd args) in
+        let slen = String.length s in
+        let suflen = String.length suffix in
+        VBool (suflen <= slen && String.sub s (slen - suflen) suflen = suffix))))
+  |> StringMap.add "replace" (VPrim (fun args ->
+      let s = expect_string "replace" (List.hd args) in
+      VPrim (fun args ->
+        let old_s = expect_string "replace" (List.hd args) in
+        VPrim (fun args ->
+          let new_s = expect_string "replace" (List.hd args) in
+          let old_len = String.length old_s in
+          if old_len = 0 then VString s
+          else
+            let buf = Buffer.create (String.length s) in
+            let rec aux i =
+              if i >= String.length s then ()
+              else if i + old_len <= String.length s && String.sub s i old_len = old_s then
+                (Buffer.add_string buf new_s; aux (i + old_len))
+              else (Buffer.add_char buf s.[i]; aux (i + 1))
+            in
+            aux 0; VString (Buffer.contents buf)))))
+  |> StringMap.add "toString" (VPrim (fun args ->
+      match List.hd args with
+      | VString s -> VString s
+      | VInt n -> VString (string_of_int n)
+      | VLong n -> VString (Int64.to_string n)
+      | VFloat f ->
+          if Float.equal (Float.round f) f then VString (string_of_int (int_of_float f))
+          else VString (string_of_float f)
+      | VBool true -> VString "true"
+      | VBool false -> VString "false"
+      | _ -> VString "<fun>"))
+
 (* Helper for binary numeric operations with type coercion *)
 let eval_numeric_binop va vb int_op long_op float_op name =
   match va, vb with
@@ -138,6 +272,16 @@ let rec eval_with_imports env expr =
         (env, VInt 0) (* Return unchanged env and dummy value *)
       else if lib_name = "operators" then (
         let final_env = create_church_booleans env in
+        imported_libraries := StringMap.add lib_name true !imported_libraries;
+        (final_env, VInt 0)
+      )
+      else if lib_name = "math" then (
+        let final_env = create_math_functions env in
+        imported_libraries := StringMap.add lib_name true !imported_libraries;
+        (final_env, VInt 0)
+      )
+      else if lib_name = "string" then (
+        let final_env = create_string_functions env in
         imported_libraries := StringMap.add lib_name true !imported_libraries;
         (final_env, VInt 0)
       )
