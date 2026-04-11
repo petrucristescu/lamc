@@ -470,59 +470,39 @@ let rec eval_with_imports env expr =
   | Import lib_name ->
       if StringMap.mem lib_name !imported_libraries then
         (env, VInt 0) (* Return unchanged env and dummy value *)
-      else if lib_name = "operators" then (
-        let final_env = create_church_booleans env in
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-        (final_env, VInt 0)
-      )
-      else if lib_name = "math" then (
-        let final_env = create_math_functions env in
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-        (final_env, VInt 0)
-      )
-      else if lib_name = "string" then (
-        let final_env = create_string_functions env in
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-        (final_env, VInt 0)
-      )
-      else if lib_name = "list" then (
-        let final_env = create_list_functions env in
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-        (final_env, VInt 0)
-      )
-      else if lib_name = "time" then (
-        let final_env = create_time_functions env in
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-        (final_env, VInt 0)
-      )
-      else (
-        (* Load the library *)
-        let lib_exprs = load_library lib_name in
-        (* Mark as imported to prevent cycles *)
-        imported_libraries := StringMap.add lib_name true !imported_libraries;
-
-        (* Process all expressions in the library *)
-        let new_env = List.fold_left
-          (fun acc_env expr ->
-            match expr with
-            | FunDef (name, args, body) ->
-                let func_val = VRecFun (name, args, body, acc_env) in
-                StringMap.add name func_val acc_env
-            | Let (name, value_expr) ->
-                (* Evaluate the value and add to environment *)
-                let (_, value) = eval_with_imports acc_env value_expr in
-                StringMap.add name (force value) acc_env
-            | _ ->
-                (* Evaluate other expressions but don't add to environment *)
-                let (_, v) = eval_with_imports acc_env expr in
-                ignore (force v);
-                acc_env
-          ) env lib_exprs
-        in
-
-        (* Return the updated environment and a dummy value *)
-        (new_env, VInt 0)
-      )
+      else
+      (* Native primitives for known libraries *)
+      let env_with_natives =
+        match lib_name with
+        | "operators" -> create_church_booleans env
+        | "math" -> create_math_functions env
+        | "string" -> create_string_functions env
+        | "list" -> create_list_functions env
+        | "time" -> create_time_functions env
+        | _ -> env
+      in
+      imported_libraries := StringMap.add lib_name true !imported_libraries;
+      (* Then load .ch file from src/lib/ if it exists *)
+      let final_env =
+        try
+          let lib_exprs = load_library lib_name in
+          List.fold_left
+            (fun acc_env expr ->
+              match expr with
+              | FunDef (name, args, body) ->
+                  let func_val = VRecFun (name, args, body, acc_env) in
+                  StringMap.add name func_val acc_env
+              | Let (name, value_expr) ->
+                  let (_, value) = eval_with_imports acc_env value_expr in
+                  StringMap.add name (force value) acc_env
+              | _ ->
+                  let (_, v) = eval_with_imports acc_env expr in
+                  ignore (force v);
+                  acc_env
+            ) env_with_natives lib_exprs
+        with RuntimeError _ -> env_with_natives
+      in
+      (final_env, VInt 0)
   | Int n -> (env, VInt n)
   | Lng n -> (env, VLong n)
   | Float f -> (env, VFloat f)
