@@ -6,15 +6,17 @@ A functional programming language named after Alonzo Church and Alan Turing, imp
 
 - `src/churing.ml` — Entry point: parse → type-infer → evaluate
 - `src/parser.ml` — Lexer, parser, and `parse_and_infer` (type errors are non-fatal warnings)
-- `src/ast.ml` — AST: Int, Lng, Float, Str, Bool, Add, Sub, Mul, Div, Eq, Var, Lam, App, Let, FunDef, Seq, Print, Assert, Import
-- `src/eval.ml` — Evaluator: environment-based closures, VRecFun for recursion, VTailCall trampoline for TCO
+- `src/ast.ml` — AST: Int, Lng, Float, Str, Bool, Add, Sub, Mul, Div, Eq, Var, Lam, App, Let, FunDef, Seq, Assert, List, Match, Try, Import
+- `src/eval.ml` — Evaluator: environment-based closures, VRecFun for recursion, VTailCall trampoline for TCO, VList/VCons/VNil for lists
 - `src/infer.ml` — Hindley-Milner type inference with unification and type schemes
-- `src/types.ml` — Type definitions (TInt, TLong, TFloat, TString, TBool, TVar, TFun, TUnknown)
-- `src/lib/` — Standard libraries (operators.ch)
-- `src/test/` — Integration tests: `*.ch` files, assert-based or with `*.ch.out` for output diff
+- `src/types.ml` — Type definitions (TInt, TLong, TFloat, TString, TBool, TVar, TFun, TList, TUnknown)
+- `src/lib/` — Standard library `.ch` files (auto-loaded at startup)
+- `src/test/` — Integration tests: `*.ch` files, assert-based
 - `test/` — OCaml unit tests (Alcotest): parser, evaluator, type inference
 
 ## Language Syntax
+
+Programs are pure: the last expression is the program's return value (auto-printed). No `print`, no `~()` main block required.
 
 ```
 ~name arg1,arg2  body        # Named function (comma-separated args)
@@ -22,21 +24,23 @@ A functional programming language named after Alonzo Church and Alan Turing, imp
 @name value                  # Variable declaration (@x 5)
 eq a b                       # Equality (returns boolean)
 assert expr                  # Assertion (fails with exit 1 if false)
-match expr | pat -> body     # Pattern matching
-try expr (|>err. handler)    # Error handling
+match expr | pat -> body     # Pattern matching (literals, variables, wildcards, lists, cons)
+try expr (|>err. handler)    # Error handling (catches runtime errors)
 [1, 2, 3]                   # List literal
+h :: t                       # Cons pattern (head :: tail destructuring)
 import "lib"                 # Import custom library (stdlib is auto-loaded)
 ```
 
 ## Standard Library (auto-loaded)
 
-All standard library functions are available without imports:
+All standard library functions are available without imports. Each library has native primitives (OCaml) plus Churing-level helpers in `src/lib/*.ch`.
 
 - **operators**: true, false, not, and, or, if, identity, const, flip, compose
-- **math**: sqrt, sin, cos, tan, asin, acos, atan, floor, ceil, round, abs, pow, min, max, pi, e, square, cube, clamp, lerp
-- **string**: length, concat, substring, uppercase, lowercase, trim, charAt, indexOf, startsWith, endsWith, replace, toString, isEmpty, contains, repeat
+- **math**: sqrt, sin, cos, tan, asin, acos, atan, floor, ceil, round, abs, pow, min, max, pi, e, square, cube, sign, clamp, lerp
+- **string**: length, concat, substring, uppercase, lowercase, trim, charAt, indexOf, startsWith, endsWith, replace, toString, isEmpty, contains, repeat, padLeft
 - **list**: nil, cons, head, tail, empty, len, nth, reverse, range, map, filter, foldl, foldr, matchList, matchBool, sum, product, any, all, take, drop, zip, flatten, append
 - **time**: now, timeMs, year, month, day, hour, minute, second, dayOfWeek, diffTime, isLeapYear
+- **io**: readFile, writeFile, appendFile, fileExists, deleteFile, readLines, writeLines, pureIO, bindIO, mapIO, seqIO, runIO, readFileIO, writeFileIO, appendFileIO, deleteFileIO, readLinesIO, writeLinesIO
 - **church_list**: church_nil, church_cons, church_head, church_sum, church_map, church_fold, church_length
 - **result**: ok, err, matchResult, mapResult, bindResult, unwrapOr, isOk, isErr
 
@@ -57,8 +61,8 @@ The script mounts the local source as a volume, so file changes are picked up wi
 
 ## Testing Conventions
 
-- Assert-based tests: `src/test/NN_name.ch` with `assert` statements, no `.out` file needed
-- Output-based tests: `src/test/NN_name.ch` with expected output in `src/test/NN_name.ch.out`
+- Assert-based tests: `src/test/NN_name.ch` with `assert` statements (primary approach)
+- Output-based tests: `src/test/NN_name.ch` with expected output in `src/test/NN_name.ch.out` (for testing last-value output)
 - OCaml unit tests: `test/test_parser.ml`, `test/test_eval.ml`, `test/test_infer.ml`
 - CI runs `dune runtest` (unit tests) then integration tests
 
