@@ -24,6 +24,9 @@ type token =
   | Comma
   | LBracket
   | RBracket
+  | LBrace
+  | RBrace
+  | Colon
   | Pipe
   | Arrow
   | ColonColon
@@ -75,6 +78,10 @@ let tokenize s =
       aux (i+1) line (col+1) ((LBracket, line, col) :: acc)
     else if s.[i] = ']' then
       aux (i+1) line (col+1) ((RBracket, line, col) :: acc)
+    else if s.[i] = '{' then
+      aux (i+1) line (col+1) ((LBrace, line, col) :: acc)
+    else if s.[i] = '}' then
+      aux (i+1) line (col+1) ((RBrace, line, col) :: acc)
     else if s.[i] = '~' then
       aux (i+1) line (col+1) ((Tilde, line, col) :: acc)
     else if s.[i] = ',' then
@@ -85,6 +92,8 @@ let tokenize s =
       aux (i+1) line (col+1) ((Pipe, line, col) :: acc)
     else if i + 1 < String.length s && s.[i] = ':' && s.[i+1] = ':' then
       aux (i+2) line (col+2) ((ColonColon, line, col) :: acc)
+    else if s.[i] = ':' then
+      aux (i+1) line (col+1) ((Colon, line, col) :: acc)
     else if is_whitespace s.[i] then
       aux (i+1) line (col+1) acc
     else if s.[i] = '+' then
@@ -292,6 +301,7 @@ and parse_app tokens =
     | (Ident _, _, _) :: _
     | (LParen, _, _) :: _
     | (LBracket, _, _) :: _
+    | (LBrace, _, _) :: _
     | (String _, _, _) :: _ ->
         let arg, rest = parse_primary toks in
         aux (App (acc, arg)) rest
@@ -387,6 +397,29 @@ and parse_primary tokens =
       in
       let items, rest' = parse_list_items rest [] in
       (List items, rest')
+  | (LBrace, _, _) :: rest ->
+      let rec parse_dict_entries toks acc =
+        let toks = skip_newlines toks in
+        match toks with
+        | (RBrace, _, _) :: rest' -> (List.rev acc, rest')
+        | (Ident key, _, _) :: rest' | (String key, _, _) :: rest' ->
+            let rest' = skip_newlines rest' in
+            (match rest' with
+             | (Colon, _, _) :: rest'' ->
+                 let value, rest''' = parse_expr (skip_newlines rest'') in
+                 let rest''' = skip_newlines rest''' in
+                 (match rest''' with
+                  | (Comma, _, _) :: rest'''' -> parse_dict_entries rest'''' ((key, value) :: acc)
+                  | (RBrace, _, _) :: rest'''' -> (List.rev ((key, value) :: acc), rest'''')
+                  | (_, line, col) :: _ -> raise (ParseError ("Expected ',' or '}' in dict", line, col))
+                  | [] -> raise (ParseError ("Unterminated dict literal", 1, 1)))
+             | (_, line, col) :: _ -> raise (ParseError ("Expected ':' after dict key", line, col))
+             | [] -> raise (ParseError ("Expected ':' after dict key", 1, 1)))
+        | (_, line, col) :: _ -> raise (ParseError ("Expected key in dict", line, col))
+        | [] -> raise (ParseError ("Unterminated dict literal", 1, 1))
+      in
+      let entries, rest' = parse_dict_entries rest [] in
+      (Dict entries, rest')
   | (At, _, _) :: _ -> parse_var_def tokens
   | (tok, line, col) :: _ -> raise (ParseError ("Invalid expression", line, col))
   | [] -> raise (ParseError ("Invalid expression", 1, 1))
@@ -421,6 +454,7 @@ let string_of_typ t =
     | TVar v -> "'" ^ v
     | TFun (a, b) -> "(" ^ aux a ^ " -> " ^ aux b ^ ")"
     | TList a -> "[" ^ aux a ^ "]"
+    | TDict a -> "{String: " ^ aux a ^ "}"
     | TUnknown -> "?"
   in aux t
 
