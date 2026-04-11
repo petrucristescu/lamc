@@ -195,6 +195,18 @@ let add_operators_to_env env =
   let b13 = fresh_var () in
   let env = StringMap.add "pair" (mono (TFun (a13, TFun (b13, TFun (TFun (a13, TFun (b13, a13)), a13))))) env in
   let env = StringMap.add "nil" (mono (TList (fresh_var ()))) env in
+
+  (* Church-style eliminators *)
+  let ml_a = fresh_var () in
+  let ml_b = fresh_var () in
+  (* matchList : [a] -> (unit -> b) -> (a -> [a] -> b) -> b *)
+  let env = StringMap.add "matchList" (mono (TFun (TList ml_a,
+    TFun (TFun (TList ml_a, ml_b),
+    TFun (TFun (ml_a, TFun (TList ml_a, ml_b)), ml_b))))) env in
+  let mb_a = fresh_var () in
+  let mb_b = fresh_var () in
+  (* matchBool : Bool -> a -> a -> a *)
+  let env = StringMap.add "matchBool" (mono (TFun (TBool, TFun (mb_a, TFun (mb_b, mb_a))))) env in
   env
 
 let rec infer env = function
@@ -294,5 +306,39 @@ let rec infer env = function
       let s1, t1 = infer env e in
       let s2 = unify (apply s1 t1) TBool in
       (compose s2 s1, TBool)
+  | Match (scrutinee, arms) ->
+      let s0, t_scrut = infer env scrutinee in
+      let result_tv = fresh_var () in
+      let s, t_result = List.fold_left (fun (s_acc, t_res) (pat, body) ->
+        let env' = apply_env s_acc env in
+        let s_pat, pat_bindings = infer_pattern pat (apply s_acc t_scrut) in
+        let env'' = List.fold_left (fun e (name, t) -> StringMap.add name (mono t) e) env' pat_bindings in
+        let s1, t_body = infer env'' body in
+        let s2 = unify (apply s1 t_res) t_body in
+        (compose s2 (compose s1 (compose s_pat s_acc)), apply s2 t_body)
+      ) (s0, result_tv) arms in
+      (s, t_result)
   | Import _ ->
       ([], TInt)
+
+and infer_pattern pat t_scrut : subst * (string * typ) list =
+  match pat with
+  | Ast.PWild -> ([], [])
+  | Ast.PVar x -> ([], [(x, t_scrut)])
+  | Ast.PInt _ -> (unify t_scrut TInt, [])
+  | Ast.PStr _ -> (unify t_scrut TString, [])
+  | Ast.PBool _ -> (unify t_scrut TBool, [])
+  | Ast.PList pats ->
+      let elem_tv = fresh_var () in
+      let s0 = unify t_scrut (TList elem_tv) in
+      let s, bindings = List.fold_left (fun (s_acc, binds) p ->
+        let s1, pb = infer_pattern p (apply s_acc elem_tv) in
+        (compose s1 s_acc, binds @ pb)
+      ) (s0, []) pats in
+      (s, bindings)
+  | Ast.PCons (hp, tp) ->
+      let elem_tv = fresh_var () in
+      let s0 = unify t_scrut (TList elem_tv) in
+      let s1, hb = infer_pattern hp (apply s0 elem_tv) in
+      let s2, tb = infer_pattern tp (apply (compose s1 s0) t_scrut) in
+      (compose s2 (compose s1 s0), hb @ tb)

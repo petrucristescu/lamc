@@ -18,7 +18,17 @@ type expr =
   | Print of expr
   | Assert of expr
   | List of expr list
+  | Match of expr * (pattern * expr) list
   | Import of string
+
+and pattern =
+  | PInt of int
+  | PStr of string
+  | PBool of bool
+  | PVar of string
+  | PWild
+  | PList of pattern list
+  | PCons of pattern * pattern  (* head :: tail destructuring *)
 
 let rec string_of_typ = function
   | Types.TInt -> "Int"
@@ -53,7 +63,20 @@ let rec string_of_expr = function
   | Print e -> "print " ^ string_of_expr e
   | Assert e -> "assert " ^ string_of_expr e
   | List es -> "[" ^ String.concat ", " (List.map string_of_expr es) ^ "]"
+  | Match (e, arms) ->
+      "match " ^ string_of_expr e ^ " " ^
+      String.concat " " (List.map (fun (p, body) ->
+        "| " ^ string_of_pattern p ^ " -> " ^ string_of_expr body) arms)
   | Import lib -> "import " ^ lib
+
+and string_of_pattern = function
+  | PInt n -> string_of_int n
+  | PStr s -> "\"" ^ s ^ "\""
+  | PBool b -> string_of_bool b
+  | PVar x -> x
+  | PWild -> "_"
+  | PList ps -> "[" ^ String.concat ", " (List.map string_of_pattern ps) ^ "]"
+  | PCons (h, t) -> string_of_pattern h ^ " :: " ^ string_of_pattern t
 
 let string_of_exprs exprs =
   String.concat "\n" (List.map string_of_expr exprs)

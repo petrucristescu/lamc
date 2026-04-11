@@ -24,6 +24,9 @@ type token =
   | Comma
   | LBracket
   | RBracket
+  | Pipe
+  | Arrow
+  | ColonColon
   | Newline
   | Import  (* New token for import keyword *)
   | Eof
@@ -78,10 +81,16 @@ let tokenize s =
       aux (i+1) line (col+1) ((Comma, line, col) :: acc)
     else if i + 1 < String.length s && s.[i] = '|' && s.[i+1] = '>' then
       aux (i+2) line (col+2) ((Lambda, line, col) :: acc)
+    else if s.[i] = '|' then
+      aux (i+1) line (col+1) ((Pipe, line, col) :: acc)
+    else if i + 1 < String.length s && s.[i] = ':' && s.[i+1] = ':' then
+      aux (i+2) line (col+2) ((ColonColon, line, col) :: acc)
     else if is_whitespace s.[i] then
       aux (i+1) line (col+1) acc
     else if s.[i] = '+' then
       aux (i+1) line (col+1) ((Plus, line, col) :: acc)
+    else if i + 1 < String.length s && s.[i] = '-' && s.[i+1] = '>' then
+      aux (i+2) line (col+2) ((Arrow, line, col) :: acc)
     else if s.[i] = '-' then
       aux (i+1) line (col+1) ((Minus, line, col) :: acc)
     else if s.[i] = '*' then
@@ -154,6 +163,43 @@ let tokenize s =
 let rec skip_newlines = function
   | (Newline, _, _) :: rest -> skip_newlines rest
   | tokens -> tokens
+
+(* Pattern parsing for match expressions *)
+let rec parse_pattern tokens =
+  let pat, rest = parse_pattern_atom tokens in
+  (* Check for :: (cons pattern) *)
+  match rest with
+  | (ColonColon, _, _) :: rest' ->
+      let tail_pat, rest'' = parse_pattern rest' in
+      (PCons (pat, tail_pat), rest'')
+  | _ -> (pat, rest)
+
+and parse_pattern_atom tokens =
+  match tokens with
+  | (Integer n, _, _) :: rest -> (PInt n, rest)
+  | (String s, _, _) :: rest -> (PStr s, rest)
+  | (Ident "__church_true", _, _) :: rest -> (PBool true, rest)
+  | (Ident "__church_false", _, _) :: rest -> (PBool false, rest)
+  | (Underscore, _, _) :: rest -> (PWild, rest)
+  | (Ident name, _, _) :: rest -> (PVar name, rest)
+  | (LBracket, _, _) :: rest ->
+      let rec parse_list_pats toks acc =
+        let toks = skip_newlines toks in
+        match toks with
+        | (RBracket, _, _) :: rest' -> (List.rev acc, rest')
+        | _ ->
+            let p, rest' = parse_pattern toks in
+            let rest' = skip_newlines rest' in
+            (match rest' with
+             | (Comma, _, _) :: rest'' -> parse_list_pats rest'' (p :: acc)
+             | (RBracket, _, _) :: rest'' -> (List.rev (p :: acc), rest'')
+             | (_, line, col) :: _ -> raise (ParseError ("Expected ',' or ']' in pattern", line, col))
+             | [] -> raise (ParseError ("Unterminated list pattern", 1, 1)))
+      in
+      let pats, rest' = parse_list_pats rest [] in
+      (PList pats, rest')
+  | (tok, line, col) :: _ -> raise (ParseError ("Invalid pattern", line, col))
+  | [] -> raise (ParseError ("Expected pattern", 1, 1))
 
 (* Define all parsing functions with proper mutual recursion *)
 let rec parse_expr tokens = parse_fun_def tokens
@@ -275,6 +321,25 @@ and parse_primary tokens =
   | (Integer n, _, _) :: rest -> (Int n, rest)
   | (Long n, _, _) :: rest -> (Lng n, rest)
   | (Float f, _, _) :: rest -> (Float f, rest)
+  | (Ident "match", _, _) :: rest ->
+      let scrutinee, rest' = parse_primary (skip_newlines rest) in
+      let rec parse_arms toks acc =
+        let toks = skip_newlines toks in
+        match toks with
+        | (Pipe, _, _) :: rest'' ->
+            let pat, rest''' = parse_pattern (skip_newlines rest'') in
+            let rest''' = skip_newlines rest''' in
+            (match rest''' with
+             | (Arrow, _, _) :: rest'''' ->
+                 let body, rest''''' = parse_expr (skip_newlines rest'''') in
+                 parse_arms rest''''' ((pat, body) :: acc)
+             | (_, line, col) :: _ -> raise (ParseError ("Expected '->' after pattern", line, col))
+             | [] -> raise (ParseError ("Expected '->' after pattern", 1, 1)))
+        | _ -> (List.rev acc, toks)
+      in
+      let arms, rest'' = parse_arms rest' [] in
+      if arms = [] then raise (ParseError ("match requires at least one arm", 1, 1));
+      (Match (scrutinee, arms), rest'')
   | (Ident "print", _, _) :: rest ->
       let arg, rest' = parse_expr (skip_newlines rest) in
       (Print arg, rest')
