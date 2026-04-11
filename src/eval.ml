@@ -8,6 +8,9 @@ type value =
   | VFloat of float
   | VString of string
   | VBool of bool
+  | VList of value list
+  | VCons of value * value
+  | VNil
   | VFun of string list * expr * env
   | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
@@ -58,20 +61,32 @@ let load_library library_name =
 (* Import cache to avoid loading the same library multiple times *)
 let imported_libraries = ref StringMap.empty
 
-(* Print function for values *)
-let print_value = function
-  | VInt n -> print_endline (string_of_int n)
-  | VLong n -> print_endline (Int64.to_string n)
+(* String representation of a value (without newline) *)
+let rec string_of_value = function
+  | VInt n -> string_of_int n
+  | VLong n -> Int64.to_string n
   | VFloat f ->
-      if Float.equal (Float.round f) f then
-        print_endline (string_of_int (int_of_float f))
-      else
-        print_endline (string_of_float f)
-  | VString s -> print_endline s
-  | VBool true -> print_endline "true"
-  | VBool false -> print_endline "false"
-  | VTailCall _ -> print_endline "<tailcall>"
-  | VRecFun _ | _ -> print_endline "<fun>"
+      if Float.equal (Float.round f) f then string_of_int (int_of_float f)
+      else string_of_float f
+  | VString s -> s
+  | VBool true -> "true"
+  | VBool false -> "false"
+  | VList vs -> "[" ^ String.concat ", " (List.map string_of_value vs) ^ "]"
+  | VCons _ as c -> string_of_cons c
+  | VNil -> "nil"
+  | VTailCall _ -> "<tailcall>"
+  | VRecFun _ | _ -> "<fun>"
+
+and string_of_cons v =
+  let rec collect acc = function
+    | VCons (h, t) -> collect (h :: acc) t
+    | VNil -> "[" ^ String.concat ", " (List.rev_map string_of_value acc) ^ "]"
+    | tail -> "(" ^ String.concat ", " (List.rev_map string_of_value acc) ^ " . " ^ string_of_value tail ^ ")"
+  in
+  collect [] v
+
+(* Print function for values *)
+let print_value v = print_endline (string_of_value v)
 
 (* Boolean primitives using native VBool *)
 let create_church_booleans env =
@@ -233,7 +248,100 @@ let create_string_functions env =
           else VString (string_of_float f)
       | VBool true -> VString "true"
       | VBool false -> VString "false"
-      | _ -> VString "<fun>"))
+      | v -> VString (string_of_value v)))
+
+(* List primitives *)
+(* Forward reference for eval — set by eval_with_imports at startup *)
+let eval_ref : (env -> expr -> env * value) ref = ref (fun _ _ -> failwith "eval not initialized")
+let force_ref : (value -> value) ref = ref (fun v -> v)
+
+let apply_fn f arg =
+  match f with
+  | VPrim fn -> fn [arg]
+  | VFun (x::xs, body, closure) ->
+      let closure' = StringMap.add x arg closure in
+      if xs = [] then !force_ref (snd (!eval_ref closure' body))
+      else VFun (xs, body, closure')
+  | VRecFun (name, x::xs, body, closure) ->
+      let self = VRecFun (name, x::xs, body, closure) in
+      let closure' = StringMap.add name self (StringMap.add x arg closure) in
+      if xs = [] then !force_ref (snd (!eval_ref closure' body))
+      else VFun (xs, body, closure')
+  | _ -> raise (RuntimeError "apply: expected function")
+
+let create_list_functions env =
+  let expect_list name = function
+    | VList vs -> vs
+    | VNil -> []
+    | _ -> raise (RuntimeError (name ^ ": expected list"))
+  in
+  let expect_int name = function
+    | VInt n -> n
+    | _ -> raise (RuntimeError (name ^ ": expected int"))
+  in
+  env
+  |> StringMap.add "nil" VNil
+  |> StringMap.add "cons" (VPrim (fun args ->
+      let h = List.hd args in
+      VPrim (fun args ->
+        match List.hd args with
+        | VList vs -> VList (h :: vs)
+        | VNil -> VList [h]
+        | t -> VCons (h, t))))
+  |> StringMap.add "head" (VPrim (fun args ->
+      match expect_list "head" (List.hd args) with
+      | x :: _ -> x
+      | [] -> raise (RuntimeError "head: empty list")))
+  |> StringMap.add "tail" (VPrim (fun args ->
+      match expect_list "tail" (List.hd args) with
+      | _ :: xs -> VList xs
+      | [] -> raise (RuntimeError "tail: empty list")))
+  |> StringMap.add "empty" (VPrim (fun args ->
+      VBool (expect_list "empty" (List.hd args) = [])))
+  |> StringMap.add "len" (VPrim (fun args ->
+      VInt (List.length (expect_list "len" (List.hd args)))))
+  |> StringMap.add "nth" (VPrim (fun args ->
+      let l = expect_list "nth" (List.hd args) in
+      VPrim (fun args ->
+        let n = expect_int "nth" (List.hd args) in
+        if n < 0 || n >= List.length l then raise (RuntimeError "nth: index out of bounds")
+        else List.nth l n)))
+  |> StringMap.add "reverse" (VPrim (fun args ->
+      VList (List.rev (expect_list "reverse" (List.hd args)))))
+  |> StringMap.add "range" (VPrim (fun args ->
+      let lo = expect_int "range" (List.hd args) in
+      VPrim (fun args ->
+        let hi = expect_int "range" (List.hd args) in
+        let rec build i acc = if i < lo then acc else build (i-1) (VInt i :: acc) in
+        VList (build (hi - 1) []))))
+  |> StringMap.add "map" (VPrim (fun args ->
+      let f = List.hd args in
+      VPrim (fun args ->
+        let l = expect_list "map" (List.hd args) in
+        VList (List.map (apply_fn f) l))))
+  |> StringMap.add "filter" (VPrim (fun args ->
+      let f = List.hd args in
+      VPrim (fun args ->
+        let l = expect_list "filter" (List.hd args) in
+        VList (List.filter (fun v ->
+          match apply_fn f v with
+          | VBool b -> b
+          | _ -> raise (RuntimeError "filter: predicate must return bool")
+        ) l))))
+  |> StringMap.add "foldl" (VPrim (fun args ->
+      let f = List.hd args in
+      VPrim (fun args ->
+        let init = List.hd args in
+        VPrim (fun args ->
+          let l = expect_list "foldl" (List.hd args) in
+          List.fold_left (fun acc v -> apply_fn (apply_fn f acc) v) init l))))
+  |> StringMap.add "foldr" (VPrim (fun args ->
+      let f = List.hd args in
+      VPrim (fun args ->
+        let init = List.hd args in
+        VPrim (fun args ->
+          let l = expect_list "foldr" (List.hd args) in
+          List.fold_right (fun v acc -> apply_fn (apply_fn f v) acc) l init))))
 
 (* Helper for binary numeric operations with type coercion *)
 let eval_numeric_binop va vb int_op long_op float_op name =
@@ -285,6 +393,11 @@ let rec eval_with_imports env expr =
         imported_libraries := StringMap.add lib_name true !imported_libraries;
         (final_env, VInt 0)
       )
+      else if lib_name = "list" then (
+        let final_env = create_list_functions env in
+        imported_libraries := StringMap.add lib_name true !imported_libraries;
+        (final_env, VInt 0)
+      )
       else (
         (* Load the library *)
         let lib_exprs = load_library lib_name in
@@ -318,6 +431,12 @@ let rec eval_with_imports env expr =
   | Float f -> (env, VFloat f)
   | Str s -> (env, VString s)
   | Bool b -> (env, VBool b)
+  | List items ->
+      let env', vs = List.fold_left (fun (e, acc) item ->
+        let e', v = eval_with_imports e item in
+        (e', acc @ [force v])
+      ) (env, []) items in
+      (env', VList vs)
   | Add (a, b) -> eval_binop env a b ( + ) Int64.add ( +. ) "add"
   | Sub (a, b) -> eval_binop env a b ( - ) Int64.sub ( -. ) "sub"
   | Mul (a, b) -> eval_binop env a b ( * ) Int64.mul ( *. ) "mul"
@@ -327,16 +446,22 @@ let rec eval_with_imports env expr =
       let va = force va in
       let (env'', vb) = eval_with_imports env' b in
       let vb = force vb in
-      let result =
-        match va, vb with
+      let rec values_equal a b =
+        match a, b with
         | VInt x, VInt y -> x = y
         | VLong x, VLong y -> x = y
         | VInt x, VLong y -> Int64.of_int x = y
         | VLong x, VInt y -> x = Int64.of_int y
         | VString x, VString y -> x = y
         | VBool x, VBool y -> x = y
+        | VList xs, VList ys ->
+            List.length xs = List.length ys && List.for_all2 values_equal xs ys
+        | VCons (h1, t1), VCons (h2, t2) ->
+            values_equal h1 h2 && values_equal t1 t2
+        | VNil, VNil -> true
         | _ -> false
       in
+      let result = values_equal va vb in
       (env'', VBool result)
   | Var x ->
       (try (env, StringMap.find x env)
@@ -429,6 +554,10 @@ and force = function
   | VTailCall (tc_env, tc_expr) ->
       force (snd (eval_with_imports tc_env tc_expr))
   | v -> v
+
+(* Initialize forward references for list operations *)
+let () = eval_ref := eval_with_imports
+let () = force_ref := force
 
 (* Simple wrapper around eval_with_imports to keep original interface *)
 let eval env expr =

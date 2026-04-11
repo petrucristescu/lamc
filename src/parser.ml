@@ -22,6 +22,8 @@ type token =
   | LParen
   | RParen
   | Comma
+  | LBracket
+  | RBracket
   | Newline
   | Import  (* New token for import keyword *)
   | Eof
@@ -66,6 +68,10 @@ let tokenize s =
       aux (i+1) line (col+1) ((LParen, line, col) :: acc)
     else if s.[i] = ')' then
       aux (i+1) line (col+1) ((RParen, line, col) :: acc)
+    else if s.[i] = '[' then
+      aux (i+1) line (col+1) ((LBracket, line, col) :: acc)
+    else if s.[i] = ']' then
+      aux (i+1) line (col+1) ((RBracket, line, col) :: acc)
     else if s.[i] = '~' then
       aux (i+1) line (col+1) ((Tilde, line, col) :: acc)
     else if s.[i] = ',' then
@@ -239,6 +245,7 @@ and parse_app tokens =
     | (Long _, _, _) :: _
     | (Ident _, _, _) :: _
     | (LParen, _, _) :: _
+    | (LBracket, _, _) :: _
     | (String _, _, _) :: _ ->
         let arg, rest = parse_primary toks in
         aux (App (acc, arg)) rest
@@ -298,6 +305,22 @@ and parse_primary tokens =
            raise (ParseError ("Expected closing parenthesis", line, col))
        | [] -> raise (ParseError ("Expected closing parenthesis", 1, 1)))
   | (String s, _, _) :: rest -> (Str s, rest)
+  | (LBracket, _, _) :: rest ->
+      let rec parse_list_items toks acc =
+        let toks = skip_newlines toks in
+        match toks with
+        | (RBracket, _, _) :: rest' -> (List.rev acc, rest')
+        | _ ->
+            let item, rest' = parse_expr toks in
+            let rest' = skip_newlines rest' in
+            (match rest' with
+             | (Comma, _, _) :: rest'' -> parse_list_items rest'' (item :: acc)
+             | (RBracket, _, _) :: rest'' -> (List.rev (item :: acc), rest'')
+             | (_, line, col) :: _ -> raise (ParseError ("Expected ',' or ']' in list", line, col))
+             | [] -> raise (ParseError ("Unterminated list literal", 1, 1)))
+      in
+      let items, rest' = parse_list_items rest [] in
+      (List items, rest')
   | (At, _, _) :: _ -> parse_var_def tokens
   | (tok, line, col) :: _ -> raise (ParseError ("Invalid expression", line, col))
   | [] -> raise (ParseError ("Invalid expression", 1, 1))
@@ -331,6 +354,7 @@ let string_of_typ t =
     | TString -> "String"
     | TVar v -> "'" ^ v
     | TFun (a, b) -> "(" ^ aux a ^ " -> " ^ aux b ^ ")"
+    | TList a -> "[" ^ aux a ^ "]"
     | TUnknown -> "?"
   in aux t
 
