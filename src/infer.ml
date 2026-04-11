@@ -159,6 +159,15 @@ let add_operators_to_env env =
   let env = StringMap.add "dayOfWeek" (mono (TFun (TInt, TInt))) env in
   let env = StringMap.add "diffTime" (mono (TFun (TInt, TFun (TInt, TInt)))) env in
 
+  (* File I/O functions *)
+  let env = StringMap.add "readFile" (mono (TFun (TString, TString))) env in
+  let env = StringMap.add "writeFile" (mono (TFun (TString, TFun (TString, TBool)))) env in
+  let env = StringMap.add "appendFile" (mono (TFun (TString, TFun (TString, TBool)))) env in
+  let env = StringMap.add "fileExists" (mono (TFun (TString, TBool))) env in
+  let env = StringMap.add "deleteFile" (mono (TFun (TString, TBool))) env in
+  let env = StringMap.add "readLines" (mono (TFun (TString, TList TString))) env in
+  let env = StringMap.add "writeLines" (mono (TFun (TString, TFun (TList TString, TBool)))) env in
+
   (* List operations — polymorphic via fresh vars *)
   let a1 = fresh_var () in
   let env = StringMap.add "cons" (mono (TFun (a1, TFun (TList a1, TList a1)))) env in

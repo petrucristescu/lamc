@@ -287,6 +287,75 @@ let create_time_functions env =
       let tm = tm_of_ts (expect_int "dayOfWeek" (List.hd args)) in
       VInt tm.Unix.tm_wday))
 
+(* File I/O primitives *)
+let create_io_functions env =
+  let expect_string name = function
+    | VString s -> s
+    | _ -> raise (RuntimeError (name ^ ": expected string"))
+  in
+  env
+  |> StringMap.add "readFile" (VPrim (fun args ->
+      let path = expect_string "readFile" (List.hd args) in
+      try
+        let ic = open_in path in
+        let len = in_channel_length ic in
+        let content = really_input_string ic len in
+        close_in ic;
+        VString content
+      with Sys_error msg -> raise (RuntimeError ("readFile: " ^ msg))))
+  |> StringMap.add "writeFile" (VPrim (fun args ->
+      let path = expect_string "writeFile" (List.hd args) in
+      VPrim (fun args ->
+        let content = expect_string "writeFile" (List.hd args) in
+        try
+          let oc = open_out path in
+          output_string oc content;
+          close_out oc;
+          VBool true
+        with Sys_error msg -> raise (RuntimeError ("writeFile: " ^ msg)))))
+  |> StringMap.add "appendFile" (VPrim (fun args ->
+      let path = expect_string "appendFile" (List.hd args) in
+      VPrim (fun args ->
+        let content = expect_string "appendFile" (List.hd args) in
+        try
+          let oc = open_out_gen [Open_append; Open_creat] 0o644 path in
+          output_string oc content;
+          close_out oc;
+          VBool true
+        with Sys_error msg -> raise (RuntimeError ("appendFile: " ^ msg)))))
+  |> StringMap.add "fileExists" (VPrim (fun args ->
+      let path = expect_string "fileExists" (List.hd args) in
+      VBool (Sys.file_exists path)))
+  |> StringMap.add "deleteFile" (VPrim (fun args ->
+      let path = expect_string "deleteFile" (List.hd args) in
+      try Sys.remove path; VBool true
+      with Sys_error msg -> raise (RuntimeError ("deleteFile: " ^ msg))))
+  |> StringMap.add "readLines" (VPrim (fun args ->
+      let path = expect_string "readLines" (List.hd args) in
+      try
+        let ic = open_in path in
+        let rec read_all acc =
+          try read_all (input_line ic :: acc)
+          with End_of_file -> close_in ic; List.rev acc
+        in
+        VList (List.map (fun s -> VString s) (read_all []))
+      with Sys_error msg -> raise (RuntimeError ("readLines: " ^ msg))))
+  |> StringMap.add "writeLines" (VPrim (fun args ->
+      let path = expect_string "writeLines" (List.hd args) in
+      VPrim (fun args ->
+        let lines = match List.hd args with
+          | VList vs -> List.map (fun v -> match v with
+              | VString s -> s
+              | _ -> raise (RuntimeError "writeLines: expected list of strings")) vs
+          | _ -> raise (RuntimeError "writeLines: expected list")
+        in
+        try
+          let oc = open_out path in
+          List.iter (fun s -> output_string oc s; output_char oc '\n') lines;
+          close_out oc;
+          VBool true
+        with Sys_error msg -> raise (RuntimeError ("writeLines: " ^ msg)))))
+
 (* List primitives *)
 (* Forward reference for eval — set by eval_with_imports at startup *)
 let eval_ref : (env -> expr -> env * value) ref = ref (fun _ _ -> failwith "eval not initialized")
@@ -479,6 +548,7 @@ let rec eval_with_imports env expr =
         | "string" -> create_string_functions env
         | "list" -> create_list_functions env
         | "time" -> create_time_functions env
+        | "io" -> create_io_functions env
         | _ -> env
       in
       imported_libraries := StringMap.add lib_name true !imported_libraries;
@@ -682,7 +752,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env * value option =
       (env, Some v)
 
 let load_prelude () =
-  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "church_list"; "result"] in
+  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "church_list"; "result"] in
   List.fold_left (fun env lib ->
     fst (eval_with_imports env (Import lib))
   ) StringMap.empty stdlib
