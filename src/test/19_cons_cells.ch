@@ -1,5 +1,4 @@
 # Test cons cell operations (Approach C — Lisp-style)
-import "list"
 
 # Build list from cons/nil
 @mylist (cons 1 (cons 2 (cons 3 [])))

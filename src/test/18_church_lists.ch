@@ -1,5 +1,4 @@
 # Test Church-encoded lists (Approach A — pure lambda calculus)
-import "church_list"
 
 # Build a Church list: [1, 2, 3]
 @mylist (church_cons 1 (church_cons 2 (church_cons 3 church_nil)))

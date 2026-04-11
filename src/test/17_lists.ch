@@ -1,5 +1,4 @@
 # Test native list literals and list operations (Approach B)
-import "list"
 
 @nums [1, 2, 3, 4, 5]
 @empty []

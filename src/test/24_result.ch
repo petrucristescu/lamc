@@ -1,5 +1,4 @@
 # Test Church-encoded Result type (Option B — library)
-import "result"
 
 ~(
     # Create Ok and Err values

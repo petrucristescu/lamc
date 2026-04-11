@@ -1,5 +1,4 @@
 # Test string standard library functions
-import "string"
 
 ~(
     # length

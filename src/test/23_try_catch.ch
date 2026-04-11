@@ -1,6 +1,4 @@
 # Test try/catch error handling (Option A — primitive)
-import "list"
-import "string"
 
 ~(
     # Catch division by zero

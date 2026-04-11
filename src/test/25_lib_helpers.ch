@@ -1,8 +1,4 @@
 # Test Churing-level helpers defined in library .ch files
-import "operators"
-import "math"
-import "string"
-import "list"
 
 ~(
     # operators.ch: identity, const, compose

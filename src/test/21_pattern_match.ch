@@ -1,5 +1,4 @@
 # Test pattern matching (Option A — match expression)
-import "list"
 
 ~(
     # Match on integers

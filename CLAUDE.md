@@ -24,8 +24,23 @@ A functional programming language named after Alonzo Church and Alan Turing, imp
 eq a b                       # Equality (returns boolean)
 assert expr                  # Assertion (fails with exit 1 if false)
 print expr                   # Output
-import "lib"                 # Import library
+match expr | pat -> body     # Pattern matching
+try expr (|>err. handler)    # Error handling
+[1, 2, 3]                   # List literal
+import "lib"                 # Import custom library (stdlib is auto-loaded)
 ```
+
+## Standard Library (auto-loaded)
+
+All standard library functions are available without imports:
+
+- **operators**: true, false, not, and, or, if, identity, const, flip, compose
+- **math**: sqrt, sin, cos, tan, asin, acos, atan, floor, ceil, round, abs, pow, min, max, pi, e, square, cube, clamp, lerp
+- **string**: length, concat, substring, uppercase, lowercase, trim, charAt, indexOf, startsWith, endsWith, replace, toString, isEmpty, contains, repeat
+- **list**: nil, cons, head, tail, empty, len, nth, reverse, range, map, filter, foldl, foldr, matchList, matchBool, sum, product, any, all, take, drop, zip, flatten, append
+- **time**: now, timeMs, year, month, day, hour, minute, second, dayOfWeek, diffTime, isLeapYear
+- **church_list**: church_nil, church_cons, church_head, church_sum, church_map, church_fold, church_length
+- **result**: ok, err, matchResult, mapResult, bindResult, unwrapOr, isOk, isErr
 
 ## Build & Test
 

@@ -1,5 +1,4 @@
 # Test Church-style eliminators (Option B — matching as function application)
-import "list"
 
 ~(
     # matchList: eliminates a list into empty/cons cases

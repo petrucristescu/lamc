@@ -1,5 +1,4 @@
 # Test math standard library functions
-import "math"
 
 ~(
     # sqrt
