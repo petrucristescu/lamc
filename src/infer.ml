@@ -145,6 +145,20 @@ let add_operators_to_env env =
   let a = fresh_var () in
   let env = StringMap.add "toString" (mono (TFun (a, t_str))) env in
 
+  (* Date/Time functions *)
+  let t_dummy = fresh_var () in
+  let env = StringMap.add "now" (mono (TFun (t_dummy, TInt))) env in
+  let t_dummy2 = fresh_var () in
+  let env = StringMap.add "timeMs" (mono (TFun (t_dummy2, TInt))) env in
+  let env = StringMap.add "year" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "month" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "day" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "hour" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "minute" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "second" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "dayOfWeek" (mono (TFun (TInt, TInt))) env in
+  let env = StringMap.add "diffTime" (mono (TFun (TInt, TFun (TInt, TInt)))) env in
+
   (* List operations — polymorphic via fresh vars *)
   let a1 = fresh_var () in
   let env = StringMap.add "cons" (mono (TFun (a1, TFun (TList a1, TList a1)))) env in
