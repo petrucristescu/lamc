@@ -379,6 +379,23 @@ let create_list_functions env =
         VPrim (fun args ->
           let l = expect_list "foldr" (List.hd args) in
           List.fold_right (fun v acc -> apply_fn (apply_fn f v) acc) l init))))
+  (* Church-style eliminators: matchList value on_empty on_cons *)
+  |> StringMap.add "matchList" (VPrim (fun args ->
+      let l = List.hd args in
+      VPrim (fun args ->
+        let on_empty = List.hd args in
+        VPrim (fun args ->
+          let on_cons = List.hd args in
+          match l with
+          | VList [] | VNil -> apply_fn on_empty VNil
+          | VList (h :: t) -> apply_fn (apply_fn on_cons h) (VList t)
+          | _ -> raise (RuntimeError "matchList: expected list")))))
+  (* matchBool: matchBool cond on_true on_false — Scott-encoded boolean eliminator *)
+  |> StringMap.add "matchBool" (VPrim (fun args ->
+      match List.hd args with
+      | VBool true -> VPrim (fun args -> let t = List.hd args in VPrim (fun _ -> t))
+      | VBool false -> VPrim (fun _ -> VPrim (fun args -> List.hd args))
+      | _ -> raise (RuntimeError "matchBool: expected bool")))
 
 (* Helper for binary numeric operations with type coercion *)
 let eval_numeric_binop va vb int_op long_op float_op name =
@@ -407,6 +424,44 @@ let eval_div_values va vb =
   | VInt x, VFloat y -> check_zero_float y; VFloat (float_of_int x /. y)
   | VFloat x, VInt y -> check_zero_int y; VFloat (x /. float_of_int y)
   | _ -> raise (RuntimeError "Type error in div")
+
+(* Pattern matching — returns Some bindings or None *)
+let rec match_pattern (pat : Ast.pattern) (v : value) : (string * value) list option =
+  match pat, v with
+  | Ast.PWild, _ -> Some []
+  | Ast.PVar x, _ -> Some [(x, v)]
+  | Ast.PInt n, VInt m when n = m -> Some []
+  | Ast.PStr s, VString t when s = t -> Some []
+  | Ast.PBool b, VBool c when b = c -> Some []
+  | Ast.PList pats, VList vs ->
+      if List.length pats <> List.length vs then None
+      else
+        let rec zip ps vs acc =
+          match ps, vs with
+          | [], [] -> Some acc
+          | p :: ps', v :: vs' ->
+              (match match_pattern p v with
+               | Some binds -> zip ps' vs' (acc @ binds)
+               | None -> None)
+          | _ -> None
+        in
+        zip pats vs []
+  | Ast.PList [], VNil -> Some []
+  | Ast.PCons (hp, tp), VList (h :: t) ->
+      (match match_pattern hp h with
+       | Some hb ->
+           (match match_pattern tp (VList t) with
+            | Some tb -> Some (hb @ tb)
+            | None -> None)
+       | None -> None)
+  | Ast.PCons (hp, tp), VCons (h, t) ->
+      (match match_pattern hp h with
+       | Some hb ->
+           (match match_pattern tp t with
+            | Some tb -> Some (hb @ tb)
+            | None -> None)
+       | None -> None)
+  | _ -> None
 
 (* Define an eval_with_imports function to handle environment properly *)
 (* eval_with_imports and force are mutually recursive for tail call optimization *)
@@ -575,6 +630,19 @@ let rec eval_with_imports env expr =
            raise (AssertionFailure ("Assertion failed: " ^ Ast.string_of_expr e))
        | _ ->
            raise (AssertionFailure ("Assert requires a boolean, got: " ^ Ast.string_of_expr e)))
+  | Match (scrutinee, arms) ->
+      let (env', sv) = eval_with_imports env scrutinee in
+      let sv = force sv in
+      let rec try_arms = function
+        | [] -> raise (RuntimeError ("No matching pattern for: " ^ string_of_value sv))
+        | (pat, body) :: rest ->
+            (match match_pattern pat sv with
+             | Some bindings ->
+                 let env'' = List.fold_left (fun e (k, v) -> StringMap.add k v e) env' bindings in
+                 eval_with_imports env'' body
+             | None -> try_arms rest)
+      in
+      try_arms arms
 
 (* Trampoline: resolve VTailCall chains without growing the stack.
    force is tail-recursive, so OCaml optimizes it into a loop. *)
