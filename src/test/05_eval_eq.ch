@@ -1,5 +1,5 @@
-@i_v1 9
-@i_v2 9
+@v1 9
+@v2 9
 
 ~(
     print eq v1 v2 "foo" "bar"

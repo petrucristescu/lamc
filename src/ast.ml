@@ -12,7 +12,7 @@ type expr =
   | Var of string
   | Lam of string * expr
   | App of expr * expr
-  | Let of string * Types.typ * expr
+  | Let of string * expr
   | FunDef of string * string list * expr
   | Seq of expr * expr
   | Print of expr
@@ -43,8 +43,8 @@ let rec string_of_expr = function
   | Lam (x, body) -> "|>" ^ x ^ ". " ^ string_of_expr body
   | App (f, a) -> "(" ^ string_of_expr f ^ " " ^ string_of_expr a ^ ")"
   | Str s -> "\"" ^ s ^ "\""
-  | Let (name, typ, value) ->
-      "@" ^ name ^ " : " ^ string_of_typ typ ^ " = " ^ string_of_expr value
+  | Let (name, value) ->
+      "@" ^ name ^ " " ^ string_of_expr value
   | FunDef (name, args, body) ->
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b

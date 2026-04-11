@@ -167,7 +167,7 @@ let rec infer env = function
         | _ -> apply s3 tv
       in
       (compose s3 (compose s2 s1), result_t)
-  | Let (name, _, value) ->
+  | Let (name, value) ->
       let s1, t1 = infer env value in
       (s1, apply s1 t1)
   | FunDef (name, args, body) ->

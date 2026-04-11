@@ -19,7 +19,7 @@ A functional programming language named after Alonzo Church and Alan Turing, imp
 ```
 ~name arg1,arg2  body        # Named function (comma-separated args)
 |>param. body                # Lambda expression
-@type_var value              # Variable declaration (@i_x 5 for int)
+@name value                  # Variable declaration (@x 5)
 ~( expr1 expr2 ... )         # Main block
 eq a b                       # Equality (returns boolean)
 assert expr                  # Assertion (fails with exit 1 if false)

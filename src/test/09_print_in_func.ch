@@ -1,5 +1,5 @@
-@i_v1 9
-@i_v2 8
+@v1 9
+@v2 8
 
 ~add x,y x + y
 ~sub x,y x - y
