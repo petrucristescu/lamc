@@ -691,10 +691,16 @@ let rec eval_toplevel (env : env) (expr : expr) : env =
       ignore (eval env expr);
       env
 
+let load_prelude () =
+  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "church_list"; "result"] in
+  List.fold_left (fun env lib ->
+    fst (eval_with_imports env (Import lib))
+  ) StringMap.empty stdlib
+
 let eval_program exprs =
   imported_libraries := StringMap.empty;
   try
-    let env = List.fold_left eval_toplevel StringMap.empty exprs in
+    let env = List.fold_left eval_toplevel (load_prelude ()) exprs in
     match StringMap.find_opt "main" env with
     | Some (VFun ([], body, closure)) -> ignore (eval closure body)
     | _ -> ()

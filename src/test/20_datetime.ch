@@ -1,5 +1,4 @@
 # Test date/time standard library functions
-import "time"
 
 ~(
     # now returns a positive timestamp

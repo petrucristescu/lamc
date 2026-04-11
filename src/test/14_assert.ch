@@ -1,5 +1,4 @@
 # Test the assert primitive itself
-import operators
 
 ~(
     assert true
