@@ -17,6 +17,7 @@ type expr =
   | Seq of expr * expr
   | Assert of expr
   | List of expr list
+  | Dict of (string * expr) list
   | Match of expr * (pattern * expr) list
   | Try of expr * expr
   | Import of string
@@ -40,6 +41,7 @@ let rec string_of_typ = function
   | Types.TVar v -> "'" ^ v
   | Types.TFun (a, b) -> "(" ^ string_of_typ a ^ " -> " ^ string_of_typ b ^ ")"
   | Types.TList a -> "[" ^ string_of_typ a ^ "]"
+  | Types.TDict a -> "{String: " ^ string_of_typ a ^ "}"
 
 let rec string_of_expr = function
   | Int n -> string_of_int n
@@ -62,6 +64,8 @@ let rec string_of_expr = function
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
   | Assert e -> "assert " ^ string_of_expr e
   | List es -> "[" ^ String.concat ", " (List.map string_of_expr es) ^ "]"
+  | Dict entries ->
+      "{" ^ String.concat ", " (List.map (fun (k, v) -> k ^ ": " ^ string_of_expr v) entries) ^ "}"
   | Match (e, arms) ->
       "match " ^ string_of_expr e ^ " " ^
       String.concat " " (List.map (fun (p, body) ->

@@ -11,6 +11,7 @@ type value =
   | VList of value list
   | VCons of value * value
   | VNil
+  | VDict of (string * value) list
   | VFun of string list * expr * env
   | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
@@ -74,6 +75,8 @@ let rec string_of_value = function
   | VList vs -> "[" ^ String.concat ", " (List.map string_of_value vs) ^ "]"
   | VCons _ as c -> string_of_cons c
   | VNil -> "nil"
+  | VDict entries ->
+      "{" ^ String.concat ", " (List.map (fun (k, v) -> k ^ ": " ^ string_of_value v) entries) ^ "}"
   | VTailCall _ -> "<tailcall>"
   | VRecFun _ | _ -> "<fun>"
 
@@ -115,6 +118,63 @@ let create_church_booleans env =
   |> StringMap.add "and" and_fn
   |> StringMap.add "or" or_fn
   |> StringMap.add "if" if_fn
+  (* Comparison operators — work on numeric and string values *)
+  |> StringMap.add "gt" (VPrim (fun args ->
+      let a = List.hd args in
+      VPrim (fun args ->
+        let b = List.hd args in
+        VBool (match a, b with
+          | VInt x, VInt y -> x > y
+          | VFloat x, VFloat y -> x > y
+          | VInt x, VFloat y -> float_of_int x > y
+          | VFloat x, VInt y -> x > float_of_int y
+          | VLong x, VLong y -> Int64.compare x y > 0
+          | VInt x, VLong y -> Int64.compare (Int64.of_int x) y > 0
+          | VLong x, VInt y -> Int64.compare x (Int64.of_int y) > 0
+          | VString x, VString y -> String.compare x y > 0
+          | _ -> raise (RuntimeError "gt: incompatible types")))))
+  |> StringMap.add "lt" (VPrim (fun args ->
+      let a = List.hd args in
+      VPrim (fun args ->
+        let b = List.hd args in
+        VBool (match a, b with
+          | VInt x, VInt y -> x < y
+          | VFloat x, VFloat y -> x < y
+          | VInt x, VFloat y -> float_of_int x < y
+          | VFloat x, VInt y -> x < float_of_int y
+          | VLong x, VLong y -> Int64.compare x y < 0
+          | VInt x, VLong y -> Int64.compare (Int64.of_int x) y < 0
+          | VLong x, VInt y -> Int64.compare x (Int64.of_int y) < 0
+          | VString x, VString y -> String.compare x y < 0
+          | _ -> raise (RuntimeError "lt: incompatible types")))))
+  |> StringMap.add "gte" (VPrim (fun args ->
+      let a = List.hd args in
+      VPrim (fun args ->
+        let b = List.hd args in
+        VBool (match a, b with
+          | VInt x, VInt y -> x >= y
+          | VFloat x, VFloat y -> x >= y
+          | VInt x, VFloat y -> float_of_int x >= y
+          | VFloat x, VInt y -> x >= float_of_int y
+          | VLong x, VLong y -> Int64.compare x y >= 0
+          | VInt x, VLong y -> Int64.compare (Int64.of_int x) y >= 0
+          | VLong x, VInt y -> Int64.compare x (Int64.of_int y) >= 0
+          | VString x, VString y -> String.compare x y >= 0
+          | _ -> raise (RuntimeError "gte: incompatible types")))))
+  |> StringMap.add "lte" (VPrim (fun args ->
+      let a = List.hd args in
+      VPrim (fun args ->
+        let b = List.hd args in
+        VBool (match a, b with
+          | VInt x, VInt y -> x <= y
+          | VFloat x, VFloat y -> x <= y
+          | VInt x, VFloat y -> float_of_int x <= y
+          | VFloat x, VInt y -> x <= float_of_int y
+          | VLong x, VLong y -> Int64.compare x y <= 0
+          | VInt x, VLong y -> Int64.compare (Int64.of_int x) y <= 0
+          | VLong x, VInt y -> Int64.compare x (Int64.of_int y) <= 0
+          | VString x, VString y -> String.compare x y <= 0
+          | _ -> raise (RuntimeError "lte: incompatible types")))))
 
 (* Math primitives *)
 let create_math_functions env =
@@ -249,6 +309,22 @@ let create_string_functions env =
       | VBool true -> VString "true"
       | VBool false -> VString "false"
       | v -> VString (string_of_value v)))
+  (* str: concatenate a list of values into a string (auto-converts each) *)
+  |> StringMap.add "str" (VPrim (fun args ->
+      match List.hd args with
+      | VList vs ->
+          VString (String.concat "" (List.map string_of_value vs))
+      | v -> VString (string_of_value v)))
+  (* join: join a list of values with a separator *)
+  |> StringMap.add "join" (VPrim (fun args ->
+      let sep = (match List.hd args with
+        | VString s -> s
+        | _ -> raise (RuntimeError "join: separator must be a string")) in
+      VPrim (fun args ->
+        match List.hd args with
+        | VList vs ->
+            VString (String.concat sep (List.map string_of_value vs))
+        | _ -> raise (RuntimeError "join: expected list"))))
 
 (* Date/Time primitives *)
 let create_time_functions env =
@@ -288,6 +364,168 @@ let create_time_functions env =
       VInt tm.Unix.tm_wday))
 
 (* File I/O primitives *)
+(* Dict primitives *)
+let create_dict_functions env =
+  let expect_string name = function
+    | VString s -> s
+    | _ -> raise (RuntimeError (name ^ ": expected string"))
+  in
+  let expect_dict name = function
+    | VDict entries -> entries
+    | _ -> raise (RuntimeError (name ^ ": expected dict"))
+  in
+  env
+  |> StringMap.add "get" (VPrim (fun args ->
+      let d = expect_dict "get" (List.hd args) in
+      VPrim (fun args ->
+        let k = expect_string "get" (List.hd args) in
+        match List.assoc_opt k d with
+        | Some v -> v
+        | None -> raise (RuntimeError ("get: key not found: " ^ k)))))
+  |> StringMap.add "set" (VPrim (fun args ->
+      let d = expect_dict "set" (List.hd args) in
+      VPrim (fun args ->
+        let k = expect_string "set" (List.hd args) in
+        VPrim (fun args ->
+          let v = List.hd args in
+          let d' = List.filter (fun (k', _) -> k' <> k) d in
+          VDict ((k, v) :: d')))))
+  |> StringMap.add "has" (VPrim (fun args ->
+      let d = expect_dict "has" (List.hd args) in
+      VPrim (fun args ->
+        let k = expect_string "has" (List.hd args) in
+        VBool (List.assoc_opt k d <> None))))
+  |> StringMap.add "keys" (VPrim (fun args ->
+      let d = expect_dict "keys" (List.hd args) in
+      VList (List.map (fun (k, _) -> VString k) d)))
+  |> StringMap.add "values" (VPrim (fun args ->
+      let d = expect_dict "values" (List.hd args) in
+      VList (List.map (fun (_, v) -> v) d)))
+  |> StringMap.add "merge" (VPrim (fun args ->
+      let d1 = expect_dict "merge" (List.hd args) in
+      VPrim (fun args ->
+        let d2 = expect_dict "merge" (List.hd args) in
+        let merged = List.fold_left (fun acc (k, v) ->
+          if List.assoc_opt k acc <> None then acc
+          else (k, v) :: acc) d2 d1 in
+        VDict merged)))
+  |> StringMap.add "remove" (VPrim (fun args ->
+      let d = expect_dict "remove" (List.hd args) in
+      VPrim (fun args ->
+        let k = expect_string "remove" (List.hd args) in
+        VDict (List.filter (fun (k', _) -> k' <> k) d))))
+  |> StringMap.add "entries" (VPrim (fun args ->
+      let d = expect_dict "entries" (List.hd args) in
+      VList (List.map (fun (k, v) -> VList [VString k; v]) d)))
+  |> StringMap.add "fromEntries" (VPrim (fun args ->
+      match List.hd args with
+      | VList pairs ->
+          VDict (List.map (fun pair ->
+            match pair with
+            | VList [VString k; v] -> (k, v)
+            | _ -> raise (RuntimeError "fromEntries: expected [key, value] pairs")
+          ) pairs)
+      | _ -> raise (RuntimeError "fromEntries: expected list")))
+
+(* JSON primitives *)
+let rec value_to_json = function
+  | VInt n -> string_of_int n
+  | VLong n -> Int64.to_string n
+  | VFloat f ->
+      if Float.equal (Float.round f) f then string_of_int (int_of_float f)
+      else string_of_float f
+  | VString s -> "\"" ^ String.concat "" (List.map (fun c ->
+      match c with
+      | '"' -> "\\\""
+      | '\\' -> "\\\\"
+      | '\n' -> "\\n"
+      | '\t' -> "\\t"
+      | c -> String.make 1 c
+    ) (List.init (String.length s) (String.get s))) ^ "\""
+  | VBool true -> "true"
+  | VBool false -> "false"
+  | VNil -> "null"
+  | VList vs -> "[" ^ String.concat "," (List.map value_to_json vs) ^ "]"
+  | VDict entries ->
+      "{" ^ String.concat "," (List.map (fun (k, v) ->
+        "\"" ^ k ^ "\":" ^ value_to_json v) entries) ^ "}"
+  | _ -> "null"
+
+(* Simple recursive-descent JSON parser *)
+let json_to_value s =
+  let len = String.length s in
+  let rec skip_ws i = if i < len && (s.[i] = ' ' || s.[i] = '\t' || s.[i] = '\n' || s.[i] = '\r') then skip_ws (i+1) else i in
+  let rec parse_value i =
+    let i = skip_ws i in
+    if i >= len then raise (RuntimeError "fromJson: unexpected end of input")
+    else if s.[i] = '"' then parse_string (i+1) (Buffer.create 16)
+    else if s.[i] = '[' then parse_array (i+1) []
+    else if s.[i] = '{' then parse_object (i+1) []
+    else if s.[i] = 't' && i+3 < len && String.sub s i 4 = "true" then (VBool true, i+4)
+    else if s.[i] = 'f' && i+4 < len && String.sub s i 5 = "false" then (VBool false, i+5)
+    else if s.[i] = 'n' && i+3 < len && String.sub s i 4 = "null" then (VNil, i+4)
+    else if s.[i] = '-' || (s.[i] >= '0' && s.[i] <= '9') then parse_number i
+    else raise (RuntimeError (Printf.sprintf "fromJson: unexpected char '%c' at %d" s.[i] i))
+  and parse_string i buf =
+    if i >= len then raise (RuntimeError "fromJson: unterminated string")
+    else if s.[i] = '"' then (VString (Buffer.contents buf), i+1)
+    else if s.[i] = '\\' && i+1 < len then (
+      (match s.[i+1] with
+       | '"' -> Buffer.add_char buf '"'
+       | '\\' -> Buffer.add_char buf '\\'
+       | 'n' -> Buffer.add_char buf '\n'
+       | 't' -> Buffer.add_char buf '\t'
+       | '/' -> Buffer.add_char buf '/'
+       | c -> Buffer.add_char buf '\\'; Buffer.add_char buf c);
+      parse_string (i+2) buf)
+    else (Buffer.add_char buf s.[i]; parse_string (i+1) buf)
+  and parse_number i =
+    let j = ref i in
+    let is_float = ref false in
+    if !j < len && s.[!j] = '-' then incr j;
+    while !j < len && s.[!j] >= '0' && s.[!j] <= '9' do incr j done;
+    if !j < len && s.[!j] = '.' then (is_float := true; incr j;
+      while !j < len && s.[!j] >= '0' && s.[!j] <= '9' do incr j done);
+    if !j < len && (s.[!j] = 'e' || s.[!j] = 'E') then (is_float := true; incr j;
+      if !j < len && (s.[!j] = '+' || s.[!j] = '-') then incr j;
+      while !j < len && s.[!j] >= '0' && s.[!j] <= '9' do incr j done);
+    let num_str = String.sub s i (!j - i) in
+    if !is_float then (VFloat (float_of_string num_str), !j)
+    else (VInt (int_of_string num_str), !j)
+  and parse_array i acc =
+    let i = skip_ws i in
+    if i < len && s.[i] = ']' then (VList (List.rev acc), i+1)
+    else
+      let v, i = parse_value i in
+      let i = skip_ws i in
+      if i < len && s.[i] = ',' then parse_array (i+1) (v :: acc)
+      else if i < len && s.[i] = ']' then (VList (List.rev (v :: acc)), i+1)
+      else raise (RuntimeError "fromJson: expected ',' or ']' in array")
+  and parse_object i acc =
+    let i = skip_ws i in
+    if i < len && s.[i] = '}' then (VDict (List.rev acc), i+1)
+    else if i < len && s.[i] = '"' then
+      let key_v, i = parse_string (i+1) (Buffer.create 16) in
+      let key = match key_v with VString k -> k | _ -> failwith "impossible" in
+      let i = skip_ws i in
+      if i >= len || s.[i] <> ':' then raise (RuntimeError "fromJson: expected ':' after key");
+      let v, i = parse_value (i+1) in
+      let i = skip_ws i in
+      if i < len && s.[i] = ',' then parse_object (i+1) ((key, v) :: acc)
+      else if i < len && s.[i] = '}' then (VDict (List.rev ((key, v) :: acc)), i+1)
+      else raise (RuntimeError "fromJson: expected ',' or '}' in object")
+    else raise (RuntimeError "fromJson: expected key string in object")
+  in
+  fst (parse_value (skip_ws 0))
+
+let create_json_functions env =
+  env
+  |> StringMap.add "toJson" (VPrim (fun args -> VString (value_to_json (List.hd args))))
+  |> StringMap.add "fromJson" (VPrim (fun args ->
+      match List.hd args with
+      | VString s -> json_to_value s
+      | _ -> raise (RuntimeError "fromJson: expected string")))
+
 let create_io_functions env =
   let expect_string name = function
     | VString s -> s
@@ -549,6 +787,8 @@ let rec eval_with_imports env expr =
         | "list" -> create_list_functions env
         | "time" -> create_time_functions env
         | "io" -> create_io_functions env
+        | "dict" -> create_dict_functions env
+        | "json" -> create_json_functions env
         | _ -> env
       in
       imported_libraries := StringMap.add lib_name true !imported_libraries;
@@ -584,6 +824,12 @@ let rec eval_with_imports env expr =
         (e', acc @ [force v])
       ) (env, []) items in
       (env', VList vs)
+  | Dict entries ->
+      let env', pairs = List.fold_left (fun (e, acc) (key, expr) ->
+        let e', v = eval_with_imports e expr in
+        (e', acc @ [(key, force v)])
+      ) (env, []) entries in
+      (env', VDict pairs)
   | Add (a, b) -> eval_binop env a b ( + ) Int64.add ( +. ) "add"
   | Sub (a, b) -> eval_binop env a b ( - ) Int64.sub ( -. ) "sub"
   | Mul (a, b) -> eval_binop env a b ( * ) Int64.mul ( *. ) "mul"
@@ -606,6 +852,12 @@ let rec eval_with_imports env expr =
         | VCons (h1, t1), VCons (h2, t2) ->
             values_equal h1 h2 && values_equal t1 t2
         | VNil, VNil -> true
+        | VDict a, VDict b ->
+            List.length a = List.length b &&
+            List.for_all (fun (k, v) ->
+              match List.assoc_opt k b with
+              | Some v2 -> values_equal v v2
+              | None -> false) a
         | _ -> false
       in
       let result = values_equal va vb in
@@ -752,7 +1004,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env * value option =
       (env, Some v)
 
 let load_prelude () =
-  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "church_list"; "result"] in
+  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "church_list"; "result"] in
   List.fold_left (fun env lib ->
     fst (eval_with_imports env (Import lib))
   ) StringMap.empty stdlib
