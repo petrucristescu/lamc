@@ -198,38 +198,10 @@ and parse_seq tokens =
   | e1 :: es -> (List.fold_left (fun acc e -> Seq (acc, e)) e1 es, rest)
 
 and parse_var_def tokens =
-  let parse_typed_var name value rest line col =
-    match String.split_on_char '_' name with
-    | [t; v] ->
-        let typ = match t with
-          | "i" -> TInt
-          | "l" -> TLong
-          | "s" -> TString
-          | "f" -> TFloat
-          | _ -> TUnknown
-        in
-        (Let (v, typ, value), rest)
-    | _ -> (Let (name, TUnknown, value), rest)
-  in
   match tokens with
-  | (At, line, col) :: (Ident name, _, _) :: (Integer n, _, _) :: rest ->
-      parse_typed_var name (Int n) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Long n, _, _) :: rest ->
-      parse_typed_var name (Lng n) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Float f, _, _) :: rest ->
-      parse_typed_var name (Float f) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_true", _, _) :: rest ->
-      parse_typed_var name (Bool true) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (Ident "__church_false", _, _) :: rest ->
-      parse_typed_var name (Bool false) rest line col
-  | (At, line, col) :: (Ident name, _, _) :: (String s, _, _) :: rest ->
-      parse_typed_var name (Str s) rest line col
   | (At, line, col) :: (Ident name, _, _) :: rest ->
-      (match rest with
-       | (Integer n, _, _) :: rest' -> parse_typed_var name (Int n) rest' line col
-       | (String s, _, _) :: rest' -> parse_typed_var name (Str s) rest' line col
-       | (tok, l, c) :: _ -> raise (ParseError ("Expected value after variable name", l, c))
-       | [] -> raise (ParseError ("Expected value after variable name", line, col)))
+      let value, rest' = parse_add rest in
+      (Let (name, value), rest')
   | _ -> parse_add tokens
 
 and parse_add tokens =
@@ -375,7 +347,7 @@ let parse_and_infer ?(show_types=true) input =
             Printf.printf "Expr: %s\nType: %s\n\n" (Ast.string_of_expr expr) (string_of_typ typ);
           let env' =
             match expr with
-            | Let (name, _, _) -> Types.StringMap.add name (Types.Forall ([], typ)) env
+            | Let (name, _) -> Types.StringMap.add name (Types.Forall ([], typ)) env
             | FunDef (name, _, _) -> Types.StringMap.add name (Types.Forall ([], typ)) env
             | _ -> env
           in

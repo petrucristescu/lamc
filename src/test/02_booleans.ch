@@ -1,6 +1,6 @@
 # Test boolean values and equality
-@b_v1 true
-@b_v2 false
+@v1 true
+@v2 false
 
 ~(
     assert (eq v1 true)

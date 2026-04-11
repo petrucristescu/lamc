@@ -56,9 +56,9 @@ let test_lambda () =
   | _ -> Alcotest.fail "expected Lam"
 
 let test_let_int () =
-  match parse "@i_x 5" with
-  | [Ast.Let ("x", Types.TInt, Ast.Int 5)] -> ()
-  | _ -> Alcotest.fail "expected Let x : Int = 5"
+  match parse "@x 5" with
+  | [Ast.Let ("x", Ast.Int 5)] -> ()
+  | _ -> Alcotest.fail "expected Let x = 5"
 
 let test_print () =
   match parse "print 42" with

@@ -1,10 +1,10 @@
 # Lambda+Calculus Compiler
 
-@i_v1 4
-@s_v2 "string"
-@l_v3 4l
-@l_v4 7l
-@f_v5 2.4
+@v1 4
+@v2 "string"
+@v3 4l
+@v4 7l
+@v5 2.4
 
 ~add x,y x + y
 ~sub x,y x - y

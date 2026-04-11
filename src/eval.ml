@@ -154,7 +154,7 @@ let rec eval_with_imports env expr =
             | FunDef (name, args, body) ->
                 let func_val = VRecFun (name, args, body, acc_env) in
                 StringMap.add name func_val acc_env
-            | Let (name, _, value_expr) ->
+            | Let (name, value_expr) ->
                 (* Evaluate the value and add to environment *)
                 let (_, value) = eval_with_imports acc_env value_expr in
                 StringMap.add name (force value) acc_env
@@ -228,7 +228,7 @@ let rec eval_with_imports env expr =
            VPrim (fun args -> if b then first_arg else List.hd args)
        | VPrim fn -> fn [va]
        | _ -> raise (RuntimeError "Attempt to call a non-function"))
-  | Let (name, _, value) ->
+  | Let (name, value) ->
       let (env', v) = eval_with_imports env value in
       let v = force v in
       (StringMap.add name v env', v)
@@ -296,7 +296,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env =
   | Seq (a, b) ->
       let env' = eval_toplevel env a in
       eval_toplevel env' b
-  | Let (name, _, value) ->
+  | Let (name, value) ->
       let v = eval env value in
       StringMap.add name v env
   | FunDef (name, args, body) ->

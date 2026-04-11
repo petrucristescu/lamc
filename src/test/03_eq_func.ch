@@ -1,5 +1,5 @@
-@b_v1 false
-@b_v2 true
+@v1 false
+@v2 true
 
 ~foo (
     print "foo called"
