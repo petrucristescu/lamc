@@ -1,27 +1,25 @@
-# Testing operators with ~ prefix syntax
-~import operators
+# Test boolean operators
 
 ~(
-    print (false "yes" "no")
+    # not
+    assert (eq (not false) true)
+    assert (eq (not true) false)
 
-    # Test boolean operators
-    print (not false "yes" "no")
-    print (not true "yes" "no")
+    # and
+    assert (and true true)
+    assert (not (and true false))
+    assert (not (and false true))
+    assert (not (and false false))
 
-    # Test AND operator
-    print (and true true "yes" "no")
-    print (and true false "yes" "no")
-    print (and false true "yes" "no")
+    # or
+    assert (not (or false false))
+    assert (or true false)
+    assert (or false true)
 
-    # Test OR operator
-    print (or false false "yes" "no")
-    print (or true false "yes" "no")
-    print (or false true "yes" "no")
+    # chained
+    assert (not (and true false))
+    assert (or false true)
 
-    # Test chained boolean operations
-    print (not (and true false) "Correctly not-ed" "Should not see this")
-    print (or false true "yes" "no")
-
-    # Test complex boolean expression
-    print (and (or true false) (not false) "Complex expression works" "Should not see this")
+    # complex
+    assert (and (or true false) (not false))
 )

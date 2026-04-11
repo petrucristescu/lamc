@@ -1,9 +1,0 @@
-Type error: Cannot unify types: Int and Bool
-false
-true
-foo called
-bar called
-foo called
-bar called
-foo called
-bar called
