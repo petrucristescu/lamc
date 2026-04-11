@@ -17,6 +17,7 @@ type expr =
   | Seq of expr * expr
   | Print of expr
   | Assert of expr
+  | List of expr list
   | Import of string
 
 let rec string_of_typ = function
@@ -28,6 +29,7 @@ let rec string_of_typ = function
   | Types.TUnknown -> "?"
   | Types.TVar v -> "'" ^ v
   | Types.TFun (a, b) -> "(" ^ string_of_typ a ^ " -> " ^ string_of_typ b ^ ")"
+  | Types.TList a -> "[" ^ string_of_typ a ^ "]"
 
 let rec string_of_expr = function
   | Int n -> string_of_int n
@@ -50,6 +52,7 @@ let rec string_of_expr = function
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
   | Print e -> "print " ^ string_of_expr e
   | Assert e -> "assert " ^ string_of_expr e
+  | List es -> "[" ^ String.concat ", " (List.map string_of_expr es) ^ "]"
   | Import lib -> "import " ^ lib
 
 let string_of_exprs exprs =

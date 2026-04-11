@@ -12,6 +12,7 @@ let rec apply subst t =
   | TVar v ->
       (try List.assoc v subst with Not_found -> t)
   | TFun (a, b) -> TFun (apply subst a, apply subst b)
+  | TList a -> TList (apply subst a)
   | _ -> t
 
 let compose s1 s2 =
@@ -30,6 +31,7 @@ let fresh_var_name () =
 let rec occurs v = function
   | TVar v' -> v = v'
   | TFun (a, b) -> occurs v a || occurs v b
+  | TList a -> occurs v a
   | _ -> false
 
 let rec unify t1 t2 =
@@ -43,6 +45,7 @@ let rec unify t1 t2 =
       let s1 = unify a1 a2 in
       let s2 = unify (apply s1 b1) (apply s1 b2) in
       compose s2 s1
+  | TList a1, TList a2 -> unify a1 a2
   | _ -> raise (TypeError ("Cannot unify types: " ^ Ast.string_of_typ t1 ^ " and " ^ Ast.string_of_typ t2))
 
 (* Scheme helpers *)
@@ -58,6 +61,7 @@ let free_vars_typ t =
   let rec aux acc = function
     | TVar v -> if List.mem v acc then acc else v :: acc
     | TFun (a, b) -> aux (aux acc a) b
+    | TList a -> aux acc a
     | _ -> acc
   in aux [] t
 
@@ -81,6 +85,7 @@ let instantiate (Forall (vars, t)) =
   let rec aux = function
     | TVar v as tv -> (try List.assoc v subst with Not_found -> tv)
     | TFun (a, b) -> TFun (aux a, aux b)
+    | TList a -> TList (aux a)
     | t -> t
   in aux t
 
@@ -139,6 +144,43 @@ let add_operators_to_env env =
   let env = StringMap.add "replace" (mono (TFun (t_str, TFun (t_str, TFun (t_str, t_str))))) env in
   let a = fresh_var () in
   let env = StringMap.add "toString" (mono (TFun (a, t_str))) env in
+
+  (* List operations — polymorphic via fresh vars *)
+  let a1 = fresh_var () in
+  let env = StringMap.add "cons" (mono (TFun (a1, TFun (TList a1, TList a1)))) env in
+  let a2 = fresh_var () in
+  let env = StringMap.add "head" (mono (TFun (TList a2, a2))) env in
+  let a3 = fresh_var () in
+  let env = StringMap.add "tail" (mono (TFun (TList a3, TList a3))) env in
+  let a4 = fresh_var () in
+  let env = StringMap.add "empty" (mono (TFun (TList a4, t_bool))) env in
+  let a5 = fresh_var () in
+  let env = StringMap.add "len" (mono (TFun (TList a5, TInt))) env in
+
+  (* Higher-order list operations *)
+  let a6 = fresh_var () in
+  let b6 = fresh_var () in
+  let env = StringMap.add "map" (mono (TFun (TFun (a6, b6), TFun (TList a6, TList b6)))) env in
+  let a7 = fresh_var () in
+  let env = StringMap.add "filter" (mono (TFun (TFun (a7, t_bool), TFun (TList a7, TList a7)))) env in
+  let a8 = fresh_var () in
+  let b8 = fresh_var () in
+  let env = StringMap.add "foldl" (mono (TFun (TFun (b8, TFun (a8, b8)), TFun (b8, TFun (TList a8, b8))))) env in
+  let a9 = fresh_var () in
+  let b9 = fresh_var () in
+  let env = StringMap.add "foldr" (mono (TFun (TFun (a9, TFun (b9, b9)), TFun (b9, TFun (TList a9, b9))))) env in
+  let a10 = fresh_var () in
+  let env = StringMap.add "nth" (mono (TFun (TList a10, TFun (TInt, a10)))) env in
+  let a11 = fresh_var () in
+  let env = StringMap.add "reverse" (mono (TFun (TList a11, TList a11))) env in
+  let a12 = fresh_var () in
+  let env = StringMap.add "range" (mono (TFun (TInt, TFun (TInt, TList a12)))) env in
+
+  (* Cons cell operations *)
+  let a13 = fresh_var () in
+  let b13 = fresh_var () in
+  let env = StringMap.add "pair" (mono (TFun (a13, TFun (b13, TFun (TFun (a13, TFun (b13, a13)), a13))))) env in
+  let env = StringMap.add "nil" (mono (TList (fresh_var ()))) env in
   env
 
 let rec infer env = function
@@ -147,6 +189,16 @@ let rec infer env = function
   | Float _ -> ([], TFloat)
   | Str _ -> ([], TString)
   | Bool _ -> ([], TBool)
+  | List [] -> ([], TList (fresh_var ()))
+  | List (x :: xs) ->
+      let s0, t0 = infer env x in
+      let s, t = List.fold_left (fun (s_acc, t_acc) elem ->
+        let s1, t1 = infer (apply_env s_acc env) elem in
+        let t_acc' = apply s1 t_acc in
+        let s2 = unify t_acc' t1 in
+        (compose s2 (compose s1 s_acc), apply s2 t1)
+      ) (s0, t0) xs in
+      (s, TList t)
   | Add (a, b) | Sub (a, b) | Mul(a, b) ->
       let s1, t1 = infer env a in
       let s2, t2 = infer (apply_env s1 env) b in

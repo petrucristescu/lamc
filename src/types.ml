@@ -6,6 +6,7 @@ type typ =
   | TBool
   | TVar of string
   | TFun of typ * typ
+  | TList of typ
   | TUnknown
 
 type scheme = Forall of string list * typ
@@ -17,6 +18,7 @@ let free_type_vars_typ t =
   let rec aux acc = function
     | TVar v -> if List.mem v acc then acc else v :: acc
     | TFun (a, b) -> aux (aux acc a) b
+    | TList a -> aux acc a
     | _ -> acc
   in aux [] t
 
@@ -40,5 +42,6 @@ let instantiate (Forall (vars, t)) =
   let rec subst_typ = function
     | TVar v as tv -> (try List.assoc v subst with Not_found -> tv)
     | TFun (a, b) -> TFun (subst_typ a, subst_typ b)
+    | TList a -> TList (subst_typ a)
     | t -> t
   in subst_typ t
