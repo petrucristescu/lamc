@@ -250,6 +250,43 @@ let create_string_functions env =
       | VBool false -> VString "false"
       | v -> VString (string_of_value v)))
 
+(* Date/Time primitives *)
+let create_time_functions env =
+  let expect_int name = function
+    | VInt n -> n
+    | _ -> raise (RuntimeError (name ^ ": expected int"))
+  in
+  let tm_of_ts ts = Unix.localtime (float_of_int ts) in
+  env
+  |> StringMap.add "now" (VPrim (fun _ -> VInt (int_of_float (Unix.time ()))))
+  |> StringMap.add "timeMs" (VPrim (fun _ -> VInt (int_of_float (Unix.gettimeofday () *. 1000.0))))
+  |> StringMap.add "year" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "year" (List.hd args)) in
+      VInt (tm.Unix.tm_year + 1900)))
+  |> StringMap.add "month" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "month" (List.hd args)) in
+      VInt (tm.Unix.tm_mon + 1)))
+  |> StringMap.add "day" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "day" (List.hd args)) in
+      VInt tm.Unix.tm_mday))
+  |> StringMap.add "hour" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "hour" (List.hd args)) in
+      VInt tm.Unix.tm_hour))
+  |> StringMap.add "minute" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "minute" (List.hd args)) in
+      VInt tm.Unix.tm_min))
+  |> StringMap.add "second" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "second" (List.hd args)) in
+      VInt tm.Unix.tm_sec))
+  |> StringMap.add "diffTime" (VPrim (fun args ->
+      let a = expect_int "diffTime" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_int "diffTime" (List.hd args) in
+        VInt (a - b))))
+  |> StringMap.add "dayOfWeek" (VPrim (fun args ->
+      let tm = tm_of_ts (expect_int "dayOfWeek" (List.hd args)) in
+      VInt tm.Unix.tm_wday))
+
 (* List primitives *)
 (* Forward reference for eval — set by eval_with_imports at startup *)
 let eval_ref : (env -> expr -> env * value) ref = ref (fun _ _ -> failwith "eval not initialized")
@@ -395,6 +432,11 @@ let rec eval_with_imports env expr =
       )
       else if lib_name = "list" then (
         let final_env = create_list_functions env in
+        imported_libraries := StringMap.add lib_name true !imported_libraries;
+        (final_env, VInt 0)
+      )
+      else if lib_name = "time" then (
+        let final_env = create_time_functions env in
         imported_libraries := StringMap.add lib_name true !imported_libraries;
         (final_env, VInt 0)
       )
