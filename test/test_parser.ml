@@ -60,11 +60,6 @@ let test_let_int () =
   | [Ast.Let ("x", Ast.Int 5)] -> ()
   | _ -> Alcotest.fail "expected Let x = 5"
 
-let test_print () =
-  match parse "print 42" with
-  | [Ast.Print (Ast.Int 42)] -> ()
-  | _ -> Alcotest.fail "expected Print 42"
-
 let test_assert () =
   match parse "assert true" with
   | [Ast.Assert (Ast.Bool true)] -> ()
@@ -106,7 +101,6 @@ let () =
     ];
     "keywords", [
       Alcotest.test_case "add" `Quick test_add;
-      Alcotest.test_case "print" `Quick test_print;
       Alcotest.test_case "assert" `Quick test_assert;
       Alcotest.test_case "eq" `Quick test_eq;
       Alcotest.test_case "import" `Quick test_import;

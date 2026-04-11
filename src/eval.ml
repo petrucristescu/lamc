@@ -587,20 +587,6 @@ let rec eval_with_imports env expr =
       let (env', va) = eval_with_imports env a in
       ignore (force va); (* Force first expression for side effects *)
       eval_with_imports env' b
-  | Print e ->
-      let (env', v) = eval_with_imports env e in
-      let v = force v in
-      let result =
-        match v with
-        | VFun ([], body, closure) ->
-            (* Auto-invoke zero-parameter functions when printing *)
-            let (_, v') = eval_with_imports closure body in
-            force v'
-        | _ ->
-            print_value v;
-            v
-      in
-      (env', result)
   | Assert e ->
       let (env', v) = eval_with_imports env e in
       let v = force v in
@@ -671,25 +657,29 @@ let eval env expr =
   let (_, value) = eval_with_imports env expr in
   force value
 
-let rec eval_toplevel (env : env) (expr : expr) : env =
+(* Evaluate a top-level expression, returning updated env and optional last value *)
+let rec eval_toplevel (env : env) (expr : expr) : env * value option =
   match expr with
   | Seq (a, b) ->
-      let env' = eval_toplevel env a in
+      let env', _ = eval_toplevel env a in
       eval_toplevel env' b
   | Let (name, value) ->
       let v = eval env value in
-      StringMap.add name v env
+      (StringMap.add name v env, None)
+  | FunDef ("main", [], body) ->
+      (* ~() main block: evaluate body directly *)
+      let v = eval env body in
+      (env, Some v)
   | FunDef (name, args, body) ->
       let f = if args = [] then VFun (args, body, env)
               else VRecFun (name, args, body, env) in
-      StringMap.add name f env
+      (StringMap.add name f env, None)
   | Import lib_name ->
-      (* Process imports directly at toplevel to update the environment *)
       let (new_env, _) = eval_with_imports env (Import lib_name) in
-      new_env
+      (new_env, None)
   | _ ->
-      ignore (eval env expr);
-      env
+      let v = eval env expr in
+      (env, Some v)
 
 let load_prelude () =
   let stdlib = ["operators"; "math"; "string"; "list"; "time"; "church_list"; "result"] in
@@ -700,15 +690,15 @@ let load_prelude () =
 let eval_program exprs =
   imported_libraries := StringMap.empty;
   try
-    let env = List.fold_left eval_toplevel (load_prelude ()) exprs in
-    match StringMap.find_opt "main" env with
-    | Some (VFun ([], body, closure)) -> ignore (eval closure body)
-    | _ -> ()
+    let _env, last_value = List.fold_left (fun (env, _last) expr ->
+      eval_toplevel env expr
+    ) (load_prelude (), None) exprs in
+    (* Option C: auto-print the last expression's value *)
+    (match last_value with
+     | Some v -> print_value v
+     | None -> ())
   with
   | RuntimeError msg ->
-      print_endline ("\nChuring Error: " ^ msg);
-      (* Don't re-raise the exception, just gracefully terminate *)
-      ()
+      print_endline ("\nChuring Error: " ^ msg)
   | Division_by_zero ->
       print_endline "\nChuring Error: Division by zero"
-      (* Don't re-raise the exception, just gracefully terminate *)

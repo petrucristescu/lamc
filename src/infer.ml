@@ -299,9 +299,6 @@ let rec infer env = function
       let s1, _ = infer env a in
       let s2, t2 = infer (apply_env s1 env) b in
       (compose s2 s1, t2)
-  | Print e ->
-      let s1, t1 = infer env e in
-      (s1, t1)
   | Assert e ->
       let s1, t1 = infer env e in
       let s2 = unify (apply s1 t1) TBool in

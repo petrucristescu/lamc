@@ -15,7 +15,6 @@ type expr =
   | Let of string * expr
   | FunDef of string * string list * expr
   | Seq of expr * expr
-  | Print of expr
   | Assert of expr
   | List of expr list
   | Match of expr * (pattern * expr) list
@@ -61,7 +60,6 @@ let rec string_of_expr = function
   | FunDef (name, args, body) ->
       "~" ^ name ^ " " ^ String.concat "," args ^ " " ^ string_of_expr body
   | Seq (a, b) -> string_of_expr a ^ ";\n" ^ string_of_expr b
-  | Print e -> "print " ^ string_of_expr e
   | Assert e -> "assert " ^ string_of_expr e
   | List es -> "[" ^ String.concat ", " (List.map string_of_expr es) ^ "]"
   | Match (e, arms) ->
