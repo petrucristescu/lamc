@@ -11,11 +11,11 @@
 
     # diffTime
     assert (eq (diffTime 100 50) 50)
-    assert (eq (diffTime 50 100) 0 - 50)
+    assert (eq (diffTime 50 100) (0 - 50))
 
     # dayOfWeek returns 0-6
     @dow (dayOfWeek ts)
-    assert (not (eq dow 0 - 1))
+    assert (not (eq dow (0 - 1)))
 
     # extractors on a known timestamp (Unix epoch = Jan 1 1970 00:00:00 UTC)
     # Note: these depend on timezone, so we just test they return integers

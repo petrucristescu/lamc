@@ -27,7 +27,7 @@
 
     # indexOf
     assert (eq (indexOf "hello world" "world") 6)
-    assert (eq (indexOf "hello" "xyz") 0 - 1)
+    assert (eq (indexOf "hello" "xyz") (0 - 1))
     assert (eq (indexOf "hello" "ell") 1)
 
     # startsWith, endsWith

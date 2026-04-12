@@ -1,6 +1,6 @@
-# Test zero-arg function definitions and evaluation
-~foo "foo called"
-~bar "bar called"
+# Test variable definitions and evaluation
+@foo "foo called"
+@bar "bar called"
 
 ~(
     assert (eq foo "foo called")

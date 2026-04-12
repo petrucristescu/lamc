@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: churingtest
+      MYSQL_DATABASE: churingdb
+    ports:
+      - "3308:3306"
+    volumes:
+      - ./test/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pchuringtest"]
+      interval: 3s
+      timeout: 5s
+      retries: 10

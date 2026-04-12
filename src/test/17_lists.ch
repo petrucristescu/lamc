@@ -1,16 +1,16 @@
 # Test native list literals and list operations (Approach B)
 
 @nums [1, 2, 3, 4, 5]
-@empty []
+@emptyList []
 @strs ["hello", "world"]
 
 ~(
     # Basic operations
     assert (eq (len nums) 5)
-    assert (eq (len empty) 0)
+    assert (eq (len emptyList) 0)
     assert (eq (head nums) 1)
     assert (eq (tail nums) [2, 3, 4, 5])
-    assert (empty empty)
+    assert (empty emptyList)
     assert (not (empty nums))
 
     # cons
@@ -23,7 +23,7 @@
 
     # reverse
     assert (eq (reverse nums) [5, 4, 3, 2, 1])
-    assert (eq (reverse empty) [])
+    assert (eq (reverse emptyList) [])
 
     # range
     assert (eq (range 1 6) [1, 2, 3, 4, 5])

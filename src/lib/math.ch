@@ -9,14 +9,5 @@
 # Additional helpers
 ~square x (x * x)
 ~cube x (x * x * x)
-~sign x (
-    eq x 0
-        (|>_. 0)
-        (|>_. eq (abs x) x
-            (|>_. 1)
-            (|>_. 0 - 1)
-        0)
-    0
-)
 ~clamp lo,hi,x (min hi (max lo x))
 ~lerp a,b,t (a + t * (b - a))

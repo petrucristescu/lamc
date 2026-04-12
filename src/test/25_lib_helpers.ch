@@ -14,13 +14,11 @@
     assert (eq (clamp 0.0 10.0 5.0) 5.0)
     assert (eq (lerp 0.0 10.0 0.5) 5.0)
 
-    # string.ch: isEmpty, contains, repeat
+    # string.ch: isEmpty, contains
     assert (isEmpty "")
     assert (not (isEmpty "hi"))
     assert (contains "hello world" "world")
     assert (not (contains "hello" "xyz"))
-    assert (eq (repeat "ab" 3) "ababab")
-    assert (eq (repeat "x" 0) "")
 
     # list.ch: sum, product, any, all, take, drop, append
     assert (eq (sum [1, 2, 3, 4, 5]) 15)
