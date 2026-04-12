@@ -118,6 +118,23 @@ let create_church_booleans env =
   |> StringMap.add "and" and_fn
   |> StringMap.add "or" or_fn
   |> StringMap.add "if" if_fn
+  (* Environment variable access *)
+  |> StringMap.add "env" (VPrim (fun args ->
+      match List.hd args with
+      | VString name ->
+          (match Sys.getenv_opt name with
+           | Some v -> VString v
+           | None -> raise (RuntimeError ("env: variable not set: " ^ name)))
+      | _ -> raise (RuntimeError "env: expected string")))
+  |> StringMap.add "envOr" (VPrim (fun args ->
+      match List.hd args with
+      | VString name ->
+          VPrim (fun args ->
+            let default = List.hd args in
+            match Sys.getenv_opt name with
+            | Some v -> VString v
+            | None -> default)
+      | _ -> raise (RuntimeError "envOr: expected string")))
   (* Comparison operators — work on numeric and string values *)
   |> StringMap.add "gt" (VPrim (fun args ->
       let a = List.hd args in
@@ -526,6 +543,115 @@ let create_json_functions env =
       | VString s -> json_to_value s
       | _ -> raise (RuntimeError "fromJson: expected string")))
 
+(* MySQL driver — shells out to mysql CLI *)
+let create_mysql_functions env =
+  let expect_string name = function
+    | VString s -> s
+    | _ -> raise (RuntimeError (name ^ ": expected string"))
+  in
+  let expect_dict name = function
+    | VDict d -> d
+    | _ -> raise (RuntimeError (name ^ ": expected dict"))
+  in
+  let get_field d key default =
+    match List.assoc_opt key d with
+    | Some (VString s) -> s
+    | Some (VInt n) -> string_of_int n
+    | _ -> default
+  in
+  (* Build mysql CLI command from connection dict *)
+  let mysql_args conn =
+    let d = expect_dict "mysql" conn in
+    let host = get_field d "host" "127.0.0.1" in
+    let port = get_field d "port" "3306" in
+    let user = get_field d "user" "root" in
+    let pass = get_field d "password" "" in
+    let db = get_field d "database" "" in
+    let pass_arg = if pass = "" then "" else "-p" ^ pass in
+    [| "mysql"; "-h"; host; "-P"; port; "-u"; user; pass_arg; db; "--batch"; "--raw" |]
+  in
+  (* Parse tab-separated mysql --batch output into list of dicts *)
+  let parse_mysql_output output =
+    let lines = String.split_on_char '\n' output in
+    let lines = List.filter (fun s -> String.length (String.trim s) > 0) lines in
+    match lines with
+    | [] -> VList []
+    | header :: rows ->
+        let cols = String.split_on_char '\t' header in
+        let ncols = List.length cols in
+        VList (List.map (fun row ->
+          let vals = String.split_on_char '\t' row in
+          let nvals = List.length vals in
+          let padded =
+            if nvals < ncols then vals @ List.init (ncols - nvals) (fun _ -> "NULL")
+            else if nvals > ncols then List.filteri (fun i _ -> i < ncols) vals
+            else vals in
+          let pairs = List.combine cols padded in
+          VDict (List.map (fun (k, v) ->
+            if v = "NULL" then (k, VNil)
+            else
+              (* Try to parse as int, then float, then keep as string *)
+              try (k, VInt (int_of_string v))
+              with _ ->
+                try (k, VFloat (float_of_string v))
+                with _ -> (k, VString v)
+          ) pairs)
+        ) rows)
+  in
+  let read_all ic =
+    let buf = Buffer.create 256 in
+    (try while true do Buffer.add_char buf (input_char ic) done
+     with End_of_file -> ());
+    Buffer.contents buf
+  in
+  let run_mysql conn sql =
+    let args = mysql_args conn in
+    let (stdout_ic, stdin_oc, stderr_ic) = Unix.open_process_full
+      (String.concat " " (Array.to_list (Array.map Filename.quote args)))
+      (Unix.environment ()) in
+    output_string stdin_oc sql;
+    output_char stdin_oc '\n';
+    close_out stdin_oc;
+    let output = read_all stdout_ic in
+    let errors = read_all stderr_ic in
+    let status = Unix.close_process_full (stdout_ic, stdin_oc, stderr_ic) in
+    match status with
+    | Unix.WEXITED 0 -> output
+    | _ ->
+        let msg = String.trim errors in
+        let msg = if msg = "" then String.trim output else msg in
+        let msg = if msg = "" then "command failed" else msg in
+        raise (RuntimeError ("mysql: " ^ msg))
+  in
+  env
+  |> StringMap.add "mysqlConnect" (VPrim (fun args ->
+      (* Accept a config dict or build from env vars *)
+      match List.hd args with
+      | VDict _ as d -> d
+      | VInt 0 | VNil ->
+          (* Build from environment variables *)
+          VDict [
+            ("host", VString (match Sys.getenv_opt "MYSQL_HOST" with Some s -> s | None -> "127.0.0.1"));
+            ("port", VString (match Sys.getenv_opt "MYSQL_PORT" with Some s -> s | None -> "3306"));
+            ("user", VString (match Sys.getenv_opt "MYSQL_USER" with Some s -> s | None -> "root"));
+            ("password", VString (match Sys.getenv_opt "MYSQL_PASSWORD" with Some s -> s | None -> ""));
+            ("database", VString (match Sys.getenv_opt "MYSQL_DATABASE" with Some s -> s | None -> ""));
+          ]
+      | _ -> raise (RuntimeError "mysqlConnect: expected config dict or 0 for env vars")))
+  |> StringMap.add "mysqlQuery" (VPrim (fun args ->
+      let conn = List.hd args in
+      VPrim (fun args ->
+        let sql = expect_string "mysqlQuery" (List.hd args) in
+        let output = run_mysql conn sql in
+        parse_mysql_output output)))
+  |> StringMap.add "mysqlExec" (VPrim (fun args ->
+      let conn = List.hd args in
+      VPrim (fun args ->
+        let sql = expect_string "mysqlExec" (List.hd args) in
+        let _ = run_mysql conn sql in
+        VBool true)))
+  |> StringMap.add "mysqlClose" (VPrim (fun _ -> VBool true))
+
 let create_io_functions env =
   let expect_string name = function
     | VString s -> s
@@ -789,6 +915,7 @@ let rec eval_with_imports env expr =
         | "io" -> create_io_functions env
         | "dict" -> create_dict_functions env
         | "json" -> create_json_functions env
+        | "mysql" -> create_mysql_functions env
         | _ -> env
       in
       imported_libraries := StringMap.add lib_name true !imported_libraries;
@@ -799,6 +926,10 @@ let rec eval_with_imports env expr =
           List.fold_left
             (fun acc_env expr ->
               match expr with
+              | FunDef (name, [], body) ->
+                  (* Zero-arg: evaluate body and bind as a value *)
+                  let (_, value) = eval_with_imports acc_env body in
+                  StringMap.add name (force value) acc_env
               | FunDef (name, args, body) ->
                   let func_val = VRecFun (name, args, body, acc_env) in
                   StringMap.add name func_val acc_env
@@ -1004,7 +1135,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env * value option =
       (env, Some v)
 
 let load_prelude () =
-  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "church_list"; "result"] in
+  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "mysql"; "church_list"; "result"] in
   List.fold_left (fun env lib ->
     fst (eval_with_imports env (Import lib))
   ) StringMap.empty stdlib
@@ -1020,7 +1151,5 @@ let eval_program exprs =
      | Some v -> print_value v
      | None -> ())
   with
-  | RuntimeError msg ->
-      print_endline ("\nChuring Error: " ^ msg)
   | Division_by_zero ->
-      print_endline "\nChuring Error: Division by zero"
+      raise (RuntimeError "Division by zero")

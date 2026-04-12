@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies (matching GitHub Actions setup)
 RUN apt-get update && \
-    apt-get install -y bubblewrap wget gcc make patch unzip m4 git ca-certificates bzip2 && \
+    apt-get install -y bubblewrap wget gcc make patch unzip m4 git ca-certificates bzip2 default-mysql-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Install opam 2.1.5 (same version as CI)
@@ -47,6 +47,10 @@ mkdir -p test_results
 failed=0
 for test_file in src/test/*.ch; do
     test_name=$(basename "$test_file" .ch)
+
+    # Skip database tests (require external services)
+    case "$test_name" in *_mysql*|*_dynamo*) echo "SKIP: $test_name (requires database)"; continue;; esac
+
     expected_output="src/test/${test_name}.ch.out"
 
     _build/default/src/churing.exe "$test_file" > "test_results/${test_name}.out" 2>&1

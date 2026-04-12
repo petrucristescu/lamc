@@ -114,6 +114,11 @@ let add_operators_to_env env =
   let t_or = TFun (t_bool, TFun (t_bool, t_bool)) in
   let env = StringMap.add "or" (mono t_or) env in
 
+  (* Environment variable access *)
+  let env = StringMap.add "env" (mono (TFun (TString, TString))) env in
+  let env_a = fresh_var () in
+  let env = StringMap.add "envOr" (mono (TFun (TString, TFun (env_a, env_a)))) env in
+
   (* Comparison operators — polymorphic: a -> a -> Bool *)
   let cmp_a = fresh_var () in
   let t_cmp = TFun (cmp_a, TFun (cmp_a, t_bool)) in
@@ -213,6 +218,15 @@ let add_operators_to_env env =
   let env = StringMap.add "toJson" (mono (TFun (json_a, TString))) env in
   let json_b = fresh_var () in
   let env = StringMap.add "fromJson" (mono (TFun (TString, json_b))) env in
+
+  (* MySQL functions *)
+  let mysql_conn = fresh_var () in
+  let env = StringMap.add "mysqlConnect" (mono (TFun (mysql_conn, TDict TString))) env in
+  let mysql_v = fresh_var () in
+  let env = StringMap.add "mysqlQuery" (mono (TFun (TDict TString, TFun (TString, TList (TDict mysql_v))))) env in
+  let env = StringMap.add "mysqlExec" (mono (TFun (TDict TString, TFun (TString, TBool)))) env in
+  let mysql_c = fresh_var () in
+  let env = StringMap.add "mysqlClose" (mono (TFun (mysql_c, TBool))) env in
 
   (* List operations — polymorphic via fresh vars *)
   let a1 = fresh_var () in

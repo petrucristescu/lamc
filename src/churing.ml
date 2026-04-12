@@ -26,7 +26,10 @@ let () =
     Eval.eval_program exprs
   with
     | Eval.AssertionFailure msg ->
-      print_endline msg;
+      Printf.eprintf "%s\n" msg;
+      exit 1
+    | Eval.RuntimeError msg ->
+      Printf.eprintf "Churing Error: %s\n" msg;
       exit 1
     | Parser.ParseError (msg, line, col) ->
-      Printf.printf "Parse error at line %d, col %d: %s\n" line col msg
+      Printf.eprintf "Parse error at line %d, col %d: %s\n" line col msg
