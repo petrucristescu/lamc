@@ -119,6 +119,9 @@ let add_operators_to_env env =
   let env_a = fresh_var () in
   let env = StringMap.add "envOr" (mono (TFun (TString, TFun (env_a, env_a)))) env in
 
+  let rand_a = fresh_var () in
+  let env = StringMap.add "random" (mono (TFun (rand_a, TFloat))) env in
+
   (* Comparison operators — polymorphic: a -> a -> Bool *)
   let cmp_a = fresh_var () in
   let t_cmp = TFun (cmp_a, TFun (cmp_a, t_bool)) in
@@ -146,6 +149,9 @@ let add_operators_to_env env =
   let env = StringMap.add "round" (mono t_float_int) env in
   let env = StringMap.add "abs" (mono t_float_float) env in
   let env = StringMap.add "pow" (mono t_float_float_float) env in
+  let env = StringMap.add "exp" (mono t_float_float) env in
+  let env = StringMap.add "log" (mono t_float_float) env in
+  let env = StringMap.add "tanh" (mono t_float_float) env in
   let env = StringMap.add "min" (mono t_float_float_float) env in
   let env = StringMap.add "max" (mono t_float_float_float) env in
 
@@ -163,6 +169,11 @@ let add_operators_to_env env =
   let env = StringMap.add "startsWith" (mono (TFun (t_str, TFun (t_str, t_bool)))) env in
   let env = StringMap.add "endsWith" (mono (TFun (t_str, TFun (t_str, t_bool)))) env in
   let env = StringMap.add "replace" (mono (TFun (t_str, TFun (t_str, TFun (t_str, t_str))))) env in
+  let env = StringMap.add "split" (mono (TFun (t_str, TFun (t_str, TList t_str)))) env in
+  let toFloat_a = fresh_var () in
+  let env = StringMap.add "toFloat" (mono (TFun (toFloat_a, TFloat))) env in
+  let toInt_a = fresh_var () in
+  let env = StringMap.add "toInt" (mono (TFun (toInt_a, TInt))) env in
   let a = fresh_var () in
   let env = StringMap.add "toString" (mono (TFun (a, t_str))) env in
   let str_a = fresh_var () in

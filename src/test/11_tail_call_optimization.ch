@@ -13,12 +13,12 @@
     (eq n 0 (|>_. 0) (|>_. countdown (n - 1))) 0
 )
 
-~(
-    assert (eq (sum_tail 10 0) 55)
-    assert (eq (fact_tail 5 1) 120)
-    assert (eq (fact_tail 10 1) 3628800)
+assert (eq (sum_tail 10 0) 55)
+assert (eq (fact_tail 5 1) 120)
+assert (eq (fact_tail 10 1) 3628800)
 
-    # Deep recursion - would stack overflow without TCO
-    assert (eq (countdown 100000) 0)
-    assert (eq (sum_tail 100000 0) 5000050000L)
-)
+# Deep recursion - would stack overflow without TCO
+assert (eq (countdown 100000) 0)
+assert (eq (sum_tail 100000 0) 5000050000L)
+
+true

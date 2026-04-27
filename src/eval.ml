@@ -2,6 +2,8 @@ open Ast
 
 module StringMap = Map.Make(String)
 
+let () = Random.self_init ()
+
 type value =
   | VInt of int
   | VLong of int64
@@ -135,6 +137,8 @@ let create_church_booleans env =
             | Some v -> VString v
             | None -> default)
       | _ -> raise (RuntimeError "envOr: expected string")))
+  (* Random number generation *)
+  |> StringMap.add "random" (VPrim (fun _args -> VFloat (Random.float 1.0)))
   (* Comparison operators — work on numeric and string values *)
   |> StringMap.add "gt" (VPrim (fun args ->
       let a = List.hd args in
@@ -226,6 +230,9 @@ let create_math_functions env =
       | VFloat f -> VFloat (Float.abs f)
       | _ -> raise (RuntimeError "abs: expected numeric")))
   |> StringMap.add "pow" (math2 "pow" Float.pow)
+  |> StringMap.add "exp" (math1 "exp" Float.exp)
+  |> StringMap.add "log" (math1 "log" Float.log)
+  |> StringMap.add "tanh" (math1 "tanh" Float.tanh)
   |> StringMap.add "min" (VPrim (fun args ->
       let a = expect_numeric "min" (List.hd args) in
       VPrim (fun args -> VFloat (Float.min a (expect_numeric "min" (List.hd args))))))
@@ -332,6 +339,35 @@ let create_string_functions env =
       | VList vs ->
           VString (String.concat "" (List.map string_of_value vs))
       | v -> VString (string_of_value v)))
+  (* toFloat / toInt: parse strings to numbers *)
+  |> StringMap.add "toFloat" (VPrim (fun args ->
+      match List.hd args with
+      | VString s ->
+          (try VFloat (float_of_string s)
+           with Failure _ -> raise (RuntimeError ("toFloat: invalid number: " ^ s)))
+      | VInt n -> VFloat (float_of_int n)
+      | VLong n -> VFloat (Int64.to_float n)
+      | VFloat f -> VFloat f
+      | _ -> raise (RuntimeError "toFloat: expected string or number")))
+  |> StringMap.add "toInt" (VPrim (fun args ->
+      match List.hd args with
+      | VString s ->
+          (try VInt (int_of_string s)
+           with Failure _ -> raise (RuntimeError ("toInt: invalid integer: " ^ s)))
+      | VInt n -> VInt n
+      | VLong n -> VInt (Int64.to_int n)
+      | VFloat f -> VInt (int_of_float f)
+      | _ -> raise (RuntimeError "toInt: expected string or number")))
+  (* split: split a string by a delimiter *)
+  |> StringMap.add "split" (VPrim (fun args ->
+      let s = expect_string "split" (List.hd args) in
+      VPrim (fun args ->
+        let delim = expect_string "split" (List.hd args) in
+        if String.length delim <> 1 then
+          raise (RuntimeError "split: delimiter must be a single character")
+        else
+          let parts = String.split_on_char delim.[0] s in
+          VList (List.map (fun p -> VString p) parts))))
   (* join: join a list of values with a separator *)
   |> StringMap.add "join" (VPrim (fun args ->
       let sep = (match List.hd args with

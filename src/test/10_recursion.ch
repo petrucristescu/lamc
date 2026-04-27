@@ -13,15 +13,15 @@
     (eq n 0 (|>_. 0) (|>_. n + sum (n - 1))) 0
 )
 
-~(
-    assert (eq (factorial 0) 1)
-    assert (eq (factorial 1) 1)
-    assert (eq (factorial 5) 120)
-    assert (eq (factorial 10) 3628800)
+assert (eq (factorial 0) 1)
+assert (eq (factorial 1) 1)
+assert (eq (factorial 5) 120)
+assert (eq (factorial 10) 3628800)
 
-    assert (eq (fibonacci 0) 0)
-    assert (eq (fibonacci 1) 1)
-    assert (eq (fibonacci 7) 13)
+assert (eq (fibonacci 0) 0)
+assert (eq (fibonacci 1) 1)
+assert (eq (fibonacci 7) 13)
 
-    assert (eq (sum 10) 55)
-)
+assert (eq (sum 10) 55)
+
+true
