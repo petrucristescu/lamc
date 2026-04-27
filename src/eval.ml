@@ -129,6 +129,11 @@ let create_church_booleans env =
   |> StringMap.add "and" and_fn
   |> StringMap.add "or" or_fn
   |> StringMap.add "if" if_fn
+  (* Print: side-effect output, returns the value printed *)
+  |> StringMap.add "print" (VPrim (fun args ->
+      let v = List.hd args in
+      print_endline (string_of_value v);
+      v))
   (* Environment variable access *)
   |> StringMap.add "env" (VPrim (fun args ->
       match List.hd args with

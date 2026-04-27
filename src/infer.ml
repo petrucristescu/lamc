@@ -115,6 +115,8 @@ let add_operators_to_env env =
   let env = StringMap.add "or" (mono t_or) env in
 
   (* Environment variable access *)
+  let print_a = fresh_var () in
+  let env = StringMap.add "print" (mono (TFun (print_a, print_a))) env in
   let env = StringMap.add "env" (mono (TFun (TString, TString))) env in
   let env_a = fresh_var () in
   let env = StringMap.add "envOr" (mono (TFun (TString, TFun (env_a, env_a)))) env in
