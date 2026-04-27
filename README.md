@@ -126,8 +126,8 @@ All functions are available without imports:
 | Library | Functions |
 |---------|-----------|
 | **operators** | `true`, `false`, `not`, `and`, `or`, `if`, `env`, `envOr`, `gt`, `lt`, `gte`, `lte`, `identity`, `const`, `flip`, `compose` |
-| **math** | `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `floor`, `ceil`, `round`, `abs`, `pow`, `min`, `max`, `pi`, `e`, `square`, `cube`, `clamp`, `lerp` |
-| **string** | `length`, `concat`, `substring`, `uppercase`, `lowercase`, `trim`, `charAt`, `indexOf`, `startsWith`, `endsWith`, `replace`, `toString`, `str`, `join`, `isEmpty`, `contains` |
+| **math** | `sqrt`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `exp`, `log`, `tanh`, `floor`, `ceil`, `round`, `abs`, `pow`, `min`, `max`, `random`, `pi`, `e`, `square`, `cube`, `clamp`, `lerp` |
+| **string** | `length`, `concat`, `substring`, `uppercase`, `lowercase`, `trim`, `charAt`, `indexOf`, `startsWith`, `endsWith`, `replace`, `split`, `toString`, `toFloat`, `toInt`, `str`, `join`, `isEmpty`, `contains` |
 | **list** | `nil`, `cons`, `head`, `tail`, `empty`, `len`, `nth`, `reverse`, `range`, `map`, `filter`, `foldl`, `foldr`, `matchList`, `matchBool`, `sum`, `product`, `any`, `all`, `take`, `drop`, `zip`, `flatten`, `append` |
 | **dict** | `get`, `set`, `has`, `keys`, `values`, `merge`, `remove`, `entries`, `fromEntries`, `assocGet`, `assocSet`, `assocHas`, `assocKeys`, `assocValues` |
 | **json** | `toJson`, `fromJson` |
@@ -136,17 +136,126 @@ All functions are available without imports:
 | **mysql** | `mysqlConnect`, `mysqlQuery`, `mysqlExec`, `mysqlClose`, `mysqlFindOne`, `mysqlFind` |
 | **result** | `ok`, `err`, `matchResult`, `mapResult`, `bindResult`, `unwrapOr`, `isOk`, `isErr` |
 | **church_list** | `church_nil`, `church_cons`, `church_head`, `church_sum`, `church_map`, `church_fold`, `church_length` |
+| **vector** | `vecAdd`, `vecSub`, `vecMul`, `vecScale`, `vecDot`, `vecSum`, `vecMap`, `vecZipWith`, `vecRandom`, `vecZeros`, `vecConst`, `argmax` |
+| **matrix** | `matVecMul`, `matCol`, `matTranspose`, `outerProduct`, `matAdd`, `matScale`, `matRandom`, `matZeros` |
+| **activations** | `sigmoid`, `sigmoidDeriv`, `relu`, `reluDeriv`, `softmax` |
+| **loss** | `oneHot`, `crossEntropy` |
+| **pgm** | `readPgm`, `writePgm` |
+| **nn** | `xavierScale`, `initNetwork`, `forward`, `predict`, `backward`, `updateWeights`, `trainOne`, `trainBatch` |
 
-## Implementation
+## Architecture
 
-Churing is implemented in OCaml:
+```
+                         ┌─────────────────────────────────────────────┐
+                         │              Source File (.ch)              │
+                         └─────────────────┬───────────────────────────┘
+                                           │
+                                           ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  PARSER (src/parser.ml)                                                      │
+│                                                                              │
+│  ┌──────────┐    ┌───────────┐    ┌─────────────┐    ┌─────────────────┐    │
+│  │  Lexer   │───▶│ Tokenizer │───▶│ Parse Exprs │───▶│ Parse Patterns  │    │
+│  │ char→tok │    │  tok list │    │  tok→AST    │    │ match/cons/list │    │
+│  └──────────┘    └───────────┘    └─────────────┘    └─────────────────┘    │
+│                                                                              │
+│  Tokens: Int, Float, Long, String, Ident, LParen, RParen, LBracket,        │
+│          Pipe, Arrow, Lambda, Tilde, At, Comma, Dot, Newline, ...           │
+│                                                                              │
+│  Parsing chain: parse_expr → parse_fun_def → parse_var_def → parse_add     │
+│                 → parse_app → parse_primary                                  │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │ expr list
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  AST (src/ast.ml)                                                            │
+│                                                                              │
+│  Values:    Int | Lng | Float | Str | Bool | List | Dict                    │
+│  Ops:       Add | Sub | Mul | Div | Eq                                      │
+│  Binding:   Let(name, expr) | FunDef(name, args, body)                      │
+│  Control:   Match(expr, arms) | Try(expr, handler) | Assert(expr)           │
+│  Functions: Lam(param, body) | App(fn, arg) | Var(name)                     │
+│  Other:     Seq(a, b) | Import(name) | Cons(h, t)                           │
+└──────────────────────────────┬───────────────┬───────────────────────────────┘
+                               │               │
+                    ┌──────────┘               └──────────┐
+                    ▼                                      ▼
+┌────────────────────────────────────┐  ┌────────────────────────────────────┐
+│  TYPE INFERENCE (src/infer.ml)     │  │  EVALUATOR (src/eval.ml)           │
+│                                    │  │                                    │
+│  Hindley-Milner Algorithm:         │  │  Environment-based interpreter:    │
+│                                    │  │                                    │
+│  1. Assign fresh type vars         │  │  ┌──────────────────────────┐     │
+│  2. Generate constraints           │  │  │  load_prelude()          │     │
+│  3. Unify types                    │  │  │  Auto-load 17 stdlib     │     │
+│  4. Generalize to schemes          │  │  │  modules into env        │     │
+│  5. Report errors (non-fatal)      │  │  └────────────┬─────────────┘     │
+│                                    │  │               ▼                    │
+│  Types:                            │  │  ┌──────────────────────────┐     │
+│  TInt | TFloat | TLong | TString  │  │  │  eval_program(exprs)     │     │
+│  TBool | TVar(id) | TFun(a,b)    │  │  │  Fold over top-level     │     │
+│  TList(a) | TDict | TUnknown     │  │  │  exprs, thread env       │     │
+│                                    │  │  └────────────┬─────────────┘     │
+│  Type Schemes:                     │  │               ▼                    │
+│  ∀a. a → a  (polymorphism)        │  │  ┌──────────────────────────┐     │
+│                                    │  │  │  eval / eval_with_imports│     │
+└────────────────────────────────────┘  │  │                          │     │
+                                        │  │  Values:                 │     │
+  Errors are warnings only ──────────▶  │  │  VInt | VFloat | VLong  │     │
+  (program still executes)              │  │  VString | VBool         │     │
+                                        │  │  VFun | VRecFun (clos.) │     │
+                                        │  │  VList | VCons | VNil   │     │
+                                        │  │  VDict | VPrim          │     │
+                                        │  │  VTailCall (TCO)        │     │
+                                        │  └────────────┬─────────────┘     │
+                                        │               ▼                    │
+                                        │  ┌──────────────────────────┐     │
+                                        │  │  Auto-print result       │     │
+                                        │  │  (only if last form is   │     │
+                                        │  │   an expression, not     │     │
+                                        │  │   assert/def/import)     │     │
+                                        │  └──────────────────────────┘     │
+                                        └────────────────────────────────────┘
 
-1. **Lexer/Parser** (`src/parser.ml`) — Tokenizes and parses source into an AST
-2. **AST** (`src/ast.ml`) — Abstract syntax tree with pattern matching, dicts, and lists
-3. **Type System** (`src/types.ml`) — Types, schemes, and type operations including `TList` and `TDict`
-4. **Type Inference** (`src/infer.ml`) — Hindley-Milner with unification, generalization, and polymorphic operations
-5. **Evaluator** (`src/eval.ml`) — Environment-based interpreter with closures, recursion, tail call optimization, native lists, dicts, cons cells, pattern matching, and database access
-6. **Standard Library** (`src/lib/*.ch`) — Hybrid: native OCaml primitives + Churing-level helpers
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STANDARD LIBRARY (src/lib/*.ch + native OCaml primitives)                   │
+│                                                                              │
+│  Each module = native OCaml primitives registered in eval.ml                 │
+│              + Churing helpers defined in src/lib/<module>.ch                 │
+│                                                                              │
+│  ┌────────────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌──────┐ ┌──────┐          │
+│  │ operators  │ │  math  │ │ string │ │ list │ │ dict │ │ json │          │
+│  │ true false │ │ sqrt   │ │ length │ │ cons │ │ get  │ │toJson│          │
+│  │ not and or │ │ exp    │ │ split  │ │ map  │ │ set  │ │from  │          │
+│  │ if gt lt   │ │ log    │ │toFloat │ │filter│ │ keys │ │ Json │          │
+│  │ gte lte    │ │ tanh   │ │ toInt  │ │foldl │ │merge │ │      │          │
+│  │ env envOr  │ │ random │ │ join   │ │ zip  │ │      │ │      │          │
+│  └────────────┘ └────────┘ └────────┘ └──────┘ └──────┘ └──────┘          │
+│  ┌────────────┐ ┌────────┐ ┌────────┐ ┌──────┐ ┌──────┐ ┌──────┐          │
+│  │    time    │ │   io   │ │ mysql  │ │result│ │church│ │      │          │
+│  │ now timeMs │ │readFile│ │connect │ │ ok   │ │ _list│ │      │          │
+│  │ year month │ │write   │ │query   │ │ err  │ │c_cons│ │      │          │
+│  │ day hour   │ │readLine│ │exec    │ │unwrap│ │c_map │ │      │          │
+│  └────────────┘ └────────┘ └────────┘ └──────┘ └──────┘ └──────┘          │
+│  ┌────────────┐ ┌────────┐ ┌────────────┐ ┌──────┐ ┌──────┐ ┌──────┐     │
+│  │   vector   │ │ matrix │ │ activations│ │ loss │ │  pgm │ │  nn  │     │
+│  │ vecAdd     │ │matVecMu│ │ sigmoid    │ │oneHot│ │read  │ │init  │     │
+│  │ vecDot     │ │matTrans│ │ relu       │ │cross │ │write │ │forwd │     │
+│  │ vecScale   │ │outerPr │ │ softmax    │ │Entrop│ │ Pgm  │ │backwd│     │
+│  │ argmax     │ │matAdd  │ │ derivatives│ │  y   │ │      │ │train │     │
+│  └────────────┘ └────────┘ └────────────┘ └──────┘ └──────┘ └──────┘     │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Mechanisms
+
+**Closures & Recursion** — Functions capture their defining environment. `VRecFun` stores the function's own name in the closure, enabling self-reference without mutation.
+
+**Tail Call Optimization** — The evaluator uses a trampoline: tail calls return `VTailCall(fn, arg)` instead of recursing. The `force()` function unwinds the chain iteratively, preventing stack overflow for deep recursion (tested to 100k+ depth).
+
+**Church Encodings** — Booleans (`true a b = a`), lists (`church_cons`), and results (`ok`/`err`) are implemented as pure lambda functions. `matchBool` and `matchList` are Scott-encoded eliminators that enable lazy branching.
+
+**Hybrid Standard Library** — Each module has two layers: native OCaml primitives (registered in `eval.ml` as `VPrim` functions) for performance-critical operations, and Churing-level helpers (in `src/lib/*.ch`) built on top. For example, `map` is a native primitive, while `sum` is defined in Churing as `foldl (|>acc. |>x. acc + x) 0`.
 
 ## Usage
 
