@@ -1,7 +1,5 @@
 # Activation functions for neural network
 
-import "vector"
-
 # Sigmoid: 1 / (1 + exp(-x))
 ~sigmoid x (1.0 / (1.0 + exp (0.0 - x)))
 

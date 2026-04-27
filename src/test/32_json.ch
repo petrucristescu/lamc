@@ -53,5 +53,3 @@ assert (eq (get roundtrip "scores") [90, 85])
 # Error handling
 @bad (try (fromJson "invalid") (|>e. "parse error"))
 assert (eq bad "parse error")
-
-true

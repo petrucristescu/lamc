@@ -28,5 +28,3 @@ assert (all (|>x. not (eq x 0)) [1, 2, 3])
 assert (eq (take 2 [1, 2, 3]) [1, 2])
 assert (eq (drop 2 [1, 2, 3]) [3])
 assert (eq (append [1, 2] [3, 4]) [1, 2, 3, 4])
-
-true

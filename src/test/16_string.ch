@@ -43,5 +43,3 @@ assert (eq (replace "aaa" "a" "bb") "bbbbbb")
 assert (eq (toString 42) "42")
 assert (eq (toString "hello") "hello")
 assert (eq (toString true) "true")
-
-true

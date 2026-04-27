@@ -1,5 +1,3 @@
-import "activations"
-
 # sigmoid(0) = 0.5
 assert (eq (sigmoid 0.0) 0.5)
 
@@ -30,5 +28,3 @@ assert (lt (abs (smSum - 1.0)) 0.0001)
 # softmax: largest input -> largest probability
 assert (gt (nth sm 2) (nth sm 1))
 assert (gt (nth sm 1) (nth sm 0))
-
-true

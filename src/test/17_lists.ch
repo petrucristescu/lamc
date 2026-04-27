@@ -45,5 +45,3 @@ assert (eq (foldr (|>x. |>acc. cons x acc) [] nums) [1, 2, 3, 4, 5])
 # strings in lists
 assert (eq (head strs) "hello")
 assert (eq (len strs) 2)
-
-true

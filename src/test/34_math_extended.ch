@@ -17,5 +17,3 @@ assert (gt (tanh 100) 0.999)
 # exp and log inverse
 @x 3.14
 assert (lt (abs ((log (exp x)) - x)) 0.0001)
-
-true

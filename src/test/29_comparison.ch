@@ -31,5 +31,3 @@ assert (lt 2.0 5)
 @nums [1, 2, 3, 4, 5]
 assert (eq (filter (|>x. gt x 3) nums) [4, 5])
 assert (eq (filter (|>x. lte x 2) nums) [1, 2])
-
-true

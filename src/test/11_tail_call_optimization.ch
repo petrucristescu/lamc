@@ -20,5 +20,3 @@ assert (eq (fact_tail 10 1) 3628800)
 # Deep recursion - would stack overflow without TCO
 assert (eq (countdown 100000) 0)
 assert (eq (sum_tail 100000 0) 5000050000L)
-
-true

@@ -1,5 +1,3 @@
-import "pgm"
-
 # Write a small 2x2 PGM image, then read it back
 @testPath "examples/digits/test/test_output.pgm"
 @pixels [1.0, 0.5, 0.0, 0.75]
@@ -20,5 +18,3 @@ assert (lt (abs ((nth readPixels 2) - 0.0)) 0.01)
 
 # Clean up
 deleteFile testPath
-
-true

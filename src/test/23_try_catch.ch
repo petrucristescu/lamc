@@ -25,5 +25,3 @@ assert (eq r5 "assert caught")
     (try (1 / 0) (|>_. head []))
     (|>e. "inner also failed"))
 assert (eq r6 "inner also failed")
-
-true

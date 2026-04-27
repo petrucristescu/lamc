@@ -35,5 +35,3 @@ assert (eq (unwrapOr 0 chained) 5)
 
 @chained_err (bindResult (|>v. safeDivide v 0) (ok 10))
 assert (isErr chained_err)
-
-true

@@ -21,4 +21,3 @@ assert (or false true)
 
 # complex
 assert (and (or true false) (not false))
-true

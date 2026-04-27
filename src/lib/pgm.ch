@@ -1,7 +1,5 @@
 # PGM P2 (ASCII grayscale) image reader/writer
 
-import "vector"
-
 # Read a PGM P2 file and return pixels as a flat list of floats [0.0, 1.0]
 # Returns a dict: {width: int, height: int, pixels: [float]}
 ~readPgm path (

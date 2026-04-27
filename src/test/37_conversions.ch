@@ -21,5 +21,3 @@ assert (eq (toInt 3.7) 3)
 assert (eq pixel 255.0)
 @normalized (pixel / 255.0)
 assert (lt (abs (normalized - 1.0)) 0.0001)
-
-true

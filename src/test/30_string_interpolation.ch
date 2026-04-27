@@ -16,5 +16,3 @@ assert (eq (join "-" []) "")
 @user "Bob"
 @score 95
 assert (eq (str [user, " scored ", score, "%"]) "Bob scored 95%")
-
-true

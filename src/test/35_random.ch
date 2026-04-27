@@ -8,5 +8,3 @@ assert (gte r1 0.0)
 assert (lt r1 1.0)
 assert (gte r2 0.0)
 assert (lt r2 1.0)
-
-true

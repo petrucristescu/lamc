@@ -15,5 +15,3 @@ assert (or true false)
 assert (or false true)
 assert (not (and true false))
 assert (not (or false false))
-
-true

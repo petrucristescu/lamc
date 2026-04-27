@@ -33,5 +33,3 @@ assert (deleteFile test_path2)
 # Error handling with try
 @result (try (readFile "/tmp/nonexistent_churing_file") (|>e. "caught"))
 assert (eq result "caught")
-
-true

@@ -1,6 +1,3 @@
-import "nn"
-import "pgm"
-
 # Load trained weights
 @weightsJson (readFile "examples/digits/weights.json")
 @net (fromJson weightsJson)

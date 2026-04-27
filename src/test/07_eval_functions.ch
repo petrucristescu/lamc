@@ -4,4 +4,3 @@
 
 assert (eq foo "foo called")
 assert (eq bar "bar called")
-true

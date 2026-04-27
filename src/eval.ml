@@ -1188,10 +1188,25 @@ let rec eval_toplevel (env : env) (expr : expr) : env * value option =
       (env, Some v)
 
 let load_prelude () =
-  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "mysql"; "church_list"; "result"] in
+  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "mysql"; "church_list"; "result"; "vector"; "matrix"; "activations"; "loss"; "pgm"; "nn"] in
   List.fold_left (fun env lib ->
     fst (eval_with_imports env (Import lib))
   ) StringMap.empty stdlib
+
+let rec last_expr = function
+  | [] -> None
+  | [x] -> Some x
+  | _ :: rest -> last_expr rest
+
+let should_print_result exprs =
+  match last_expr exprs with
+  | None -> false
+  | Some (Assert _) -> false
+  | Some (FunDef _) -> false
+  | Some (Let _) -> false
+  | Some (Import _) -> false
+  | Some (Seq (_, b)) -> (match b with Assert _ | FunDef _ | Let _ | Import _ -> false | _ -> true)
+  | Some _ -> true
 
 let eval_program exprs =
   imported_libraries := StringMap.empty;
@@ -1199,10 +1214,11 @@ let eval_program exprs =
     let _env, last_value = List.fold_left (fun (env, _last) expr ->
       eval_toplevel env expr
     ) (load_prelude (), None) exprs in
-    (* Option C: auto-print the last expression's value *)
-    (match last_value with
-     | Some v -> print_value v
-     | None -> ())
+    (* Auto-print last value only if the last expression is a value expression *)
+    if should_print_result exprs then
+      (match last_value with
+       | Some v -> print_value v
+       | None -> ())
   with
   | Division_by_zero ->
       raise (RuntimeError "Division by zero")

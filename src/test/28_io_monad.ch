@@ -22,5 +22,3 @@ assert (eq (runIO chain) "step1 step2")
 
 # Cleanup
 assert (deleteFile test_path)
-
-true

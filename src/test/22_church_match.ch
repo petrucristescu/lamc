@@ -31,5 +31,3 @@ assert (eq result2 "no")
         (cons h (myFilter f t))
         (myFilter f t)))
 assert (eq (myFilter (|>x. eq x 2) [1, 2, 3, 2]) [2, 2])
-
-true

@@ -57,5 +57,3 @@ assert (eq (get (head found) "age") 30)
 
 # Close connection (no-op but good practice)
 assert (mysqlClose conn)
-
-true

@@ -1,5 +1,3 @@
-import "matrix"
-
 # matVecMul: identity-like matrix
 @mat [[1.0, 0.0], [0.0, 1.0]]
 @vec [3.0, 4.0]
@@ -38,5 +36,3 @@ assert (eq (nth mz 0) [0.0, 0.0, 0.0])
 @mr (matRandom 2 3 1.0)
 assert (eq (len mr) 2)
 assert (eq (len (nth mr 0)) 3)
-
-true

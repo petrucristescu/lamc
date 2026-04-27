@@ -23,5 +23,3 @@ assert (not (eq dow (0 - 1)))
 @s (second 0)
 assert (eq m 0)
 assert (eq s 0)
-
-true

@@ -23,5 +23,3 @@ assert (eq (fibonacci 1) 1)
 assert (eq (fibonacci 7) 13)
 
 assert (eq (sum 10) 55)
-
-true

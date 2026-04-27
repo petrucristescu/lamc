@@ -1,5 +1,3 @@
-import "pgm"
-import "vector"
 
 # Check if point (x,y) is inside rectangle [x1, y1, x2, y2]
 ~inRect x,y,r (and (gte x (nth r 0)) (and (lte x (nth r 2)) (and (gte y (nth r 1)) (lte y (nth r 3)))))

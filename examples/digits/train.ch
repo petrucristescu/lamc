@@ -1,6 +1,3 @@
-import "nn"
-import "pgm"
-
 # Load training data from PGM files
 # Filename format: {digit}_{idx}.pgm
 ~loadSample path (

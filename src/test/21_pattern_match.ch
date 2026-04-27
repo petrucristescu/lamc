@@ -61,5 +61,3 @@ assert (eq r9 20)
     | 0 -> 1
     | x -> x * fact (x - 1))
 assert (eq (fact 5) 120)
-
-true

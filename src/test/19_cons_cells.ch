@@ -21,5 +21,3 @@ assert (eq (cons 1 (cons 2 [])) [1, 2])
 # map/filter/fold work on cons-built lists
 assert (eq (map (|>x. x * 10) mylist) [10, 20, 30])
 assert (eq (foldl (|>acc. |>x. acc + x) 0 mylist) 6)
-
-true

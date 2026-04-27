@@ -23,4 +23,3 @@ assert (eq (mul 2 2) 4)
 assert (eq (mul v3 v4) 28)
 
 assert (eq (2 + 100) 102)
-true

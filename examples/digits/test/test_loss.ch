@@ -1,5 +1,3 @@
-import "loss"
-
 # oneHot
 assert (eq (oneHot 0 3) [1.0, 0.0, 0.0])
 assert (eq (oneHot 2 3) [0.0, 0.0, 1.0])
@@ -13,5 +11,3 @@ assert (lt loss 0.001)
 # crossEntropy: wrong prediction -> high loss
 @loss2 (crossEntropy pred 0)
 assert (gt loss2 5.0)
-
-true

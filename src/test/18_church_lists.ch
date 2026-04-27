@@ -21,5 +21,3 @@ assert (eq (church_sum (church_map (|>x. x * 2) mylist)) 12)
 # Empty list
 assert (eq (church_length church_nil) 0)
 assert (eq (church_sum church_nil) 0)
-
-true

@@ -1,11 +1,6 @@
 # Neural network core: forward pass, backpropagation, SGD
 # Architecture: 1024 -> 128 -> 64 -> 10
 
-import "vector"
-import "matrix"
-import "activations"
-import "loss"
-
 # Xavier initialization scale: sqrt(6 / (fan_in + fan_out))
 ~xavierScale fanIn,fanOut (sqrt (6.0 / (toFloat (fanIn + fanOut))))
 

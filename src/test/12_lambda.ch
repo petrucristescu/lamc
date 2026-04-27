@@ -21,5 +21,3 @@ assert (eq (compose (|>x. x * 2) (|>x. x + 5) 10) 30)
 assert (eq (compose (|>x. x * 4) (|>x. x + 10) 10) 80)
 
 assert (eq ((|>x. x * 5) 5) 25)
-
-true

@@ -1,7 +1,5 @@
 # Loss functions for neural network
 
-import "vector"
-
 # One-hot encode: label -> size -> vector with 1.0 at label index
 ~oneHot label,size (
     ~build i (match (eq i size)

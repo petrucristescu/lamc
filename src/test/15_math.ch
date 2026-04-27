@@ -27,5 +27,3 @@ assert (eq (max 3.0 5.0) 5.0)
 # trig: sin(0) = 0, cos(0) = 1
 assert (eq (sin 0.0) 0.0)
 assert (eq (cos 0.0) 1.0)
-
-true

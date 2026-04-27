@@ -50,5 +50,3 @@ assert (eq (assocGet church_user "name") "Alice")
 assert (assocHas church_user "name")
 assert (not (assocHas church_user "email"))
 assert (eq (assocKeys church_user) ["name", "age"])
-
-true

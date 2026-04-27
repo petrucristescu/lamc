@@ -1,5 +1,3 @@
-import "vector"
-
 # vecAdd
 assert (eq (vecAdd [1.0, 2.0, 3.0] [4.0, 5.0, 6.0]) [5.0, 7.0, 9.0])
 
@@ -34,5 +32,3 @@ assert (eq (argmax [5.0, 1.0, 2.0]) 0)
 # vecZipWith
 @added (vecZipWith (|>a. |>b. a + b) [1.0, 2.0] [3.0, 4.0])
 assert (eq added [4.0, 6.0])
-
-true

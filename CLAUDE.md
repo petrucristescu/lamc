@@ -17,7 +17,7 @@ A functional programming language named after Alonzo Church and Alan Turing, imp
 
 ## Language Syntax
 
-Programs are pure: the last expression is the program's return value (auto-printed). No `print`, no `~()` main block required.
+Programs are pure: if the last top-level form is an expression (not assert/def/import), its value is auto-printed. No `print`, no `~()` main block required.
 
 ```
 ~name arg1,arg2  body        # Named function (comma-separated args)
@@ -39,8 +39,8 @@ import "lib"                 # Import custom library (stdlib is auto-loaded)
 All standard library functions are available without imports. Each library has native primitives (OCaml) plus Churing-level helpers in `src/lib/*.ch`.
 
 - **operators**: true, false, not, and, or, if, env, envOr, gt, lt, gte, lte, identity, const, flip, compose
-- **math**: sqrt, sin, cos, tan, asin, acos, atan, floor, ceil, round, abs, pow, min, max, pi, e, square, cube, clamp, lerp
-- **string**: length, concat, substring, uppercase, lowercase, trim, charAt, indexOf, startsWith, endsWith, replace, toString, str, join, isEmpty, contains
+- **math**: sqrt, sin, cos, tan, asin, acos, atan, exp, log, tanh, floor, ceil, round, abs, pow, min, max, random, pi, e, square, cube, clamp, lerp
+- **string**: length, concat, substring, uppercase, lowercase, trim, charAt, indexOf, startsWith, endsWith, replace, split, toString, toFloat, toInt, str, join, isEmpty, contains
 - **list**: nil, cons, head, tail, empty, len, nth, reverse, range, map, filter, foldl, foldr, matchList, matchBool, sum, product, any, all, take, drop, zip, flatten, append
 - **dict**: get, set, has, keys, values, merge, remove, entries, fromEntries, assocGet, assocSet, assocHas, assocKeys, assocValues
 - **json**: toJson, fromJson
@@ -49,6 +49,12 @@ All standard library functions are available without imports. Each library has n
 - **mysql**: mysqlConnect, mysqlQuery, mysqlExec, mysqlClose, mysqlFindOne, mysqlFind, mysqlQueryIO, mysqlExecIO
 - **church_list**: church_nil, church_cons, church_head, church_sum, church_map, church_fold, church_length
 - **result**: ok, err, matchResult, mapResult, bindResult, unwrapOr, isOk, isErr
+- **vector**: vecAdd, vecSub, vecMul, vecScale, vecDot, vecSum, vecMap, vecZipWith, vecRandom, vecZeros, vecConst, argmax
+- **matrix**: matVecMul, matCol, matTranspose, outerProduct, matAdd, matScale, matRandom, matZeros
+- **activations**: sigmoid, sigmoidDeriv, relu, reluDeriv, softmax
+- **loss**: oneHot, crossEntropy
+- **pgm**: readPgm, writePgm
+- **nn**: xavierScale, initNetwork, forward, predict, backward, updateWeights, trainOne, trainBatch
 
 ## Build & Test
 
@@ -74,9 +80,17 @@ This closely replicates the GitHub Actions CI (ubuntu:22.04, opam 2.1.5, OCaml 5
 
 The script mounts the local source as a volume, so file changes are picked up without rebuilding the image.
 
+## Project Structure (continued)
+
+- `examples/digits/` — Neural network digit recognition proof of concept
+  - `generate_data.ch` — Generate synthetic 32x32 PGM training images
+  - `train.ch` — Train the network, save weights as JSON
+  - `predict.ch` — Classify a PGM image using trained weights
+  - `test/` — Tests for NN libraries
+
 ## Testing Conventions
 
-- Assert-based tests: `src/test/NN_name.ch` with `assert` statements (primary approach)
+- Assert-based tests: `src/test/NN_name.ch` with `assert` statements (primary approach, no trailing `true` needed)
 - Output-based tests: `src/test/NN_name.ch` with expected output in `src/test/NN_name.ch.out` (for testing last-value output)
 - Database tests: `src/test/NN_mysql.ch` — skipped in regular runs, use `run-tests-db.sh`
 - OCaml unit tests: `test/test_parser.ml`, `test/test_eval.ml`, `test/test_infer.ml`
