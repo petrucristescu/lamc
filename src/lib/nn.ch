@@ -1,16 +1,16 @@
 # Neural network core: forward pass, backpropagation, SGD
-# Architecture: 1024 -> 128 -> 64 -> 10
+# Architecture: 1024 -> 32 -> 16 -> 10
 
 # Xavier initialization scale: sqrt(6 / (fan_in + fan_out))
 ~xavierScale fanIn,fanOut (sqrt (6.0 / (toFloat (fanIn + fanOut))))
 
 # Initialize network with random weights
 ~initNetwork dummy (
-    @w1 (matRandom 128 1024 (xavierScale 1024 128))
-    @b1 (vecZeros 128)
-    @w2 (matRandom 64 128 (xavierScale 128 64))
-    @b2 (vecZeros 64)
-    @w3 (matRandom 10 64 (xavierScale 64 10))
+    @w1 (matRandom 32 1024 (xavierScale 1024 32))
+    @b1 (vecZeros 32)
+    @w2 (matRandom 16 32 (xavierScale 32 16))
+    @b2 (vecZeros 16)
+    @w3 (matRandom 10 16 (xavierScale 16 10))
     @b3 (vecZeros 10)
     {w1: w1, b1: b1, w2: w2, b2: b2, w3: w3, b3: b3}
 )

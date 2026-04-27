@@ -1,8 +1,7 @@
 # Sequence helper
 ~seq a,b b
 
-# Load training data from PGM files
-# Filename format: {digit}_{idx}.pgm
+# Load one sample from a PGM file
 ~loadSample path (
     @parts (split path "/")
     @filename (nth parts ((len parts) - 1))
@@ -12,91 +11,73 @@
     {input: pixels, label: label}
 )
 
-# Load all samples for a digit from a directory
-~loadDigitSamples digit,count,dir (
-    ~loadN i,acc (matchBool (gte i count) acc (
-        @path (str [dir, "/", digit, "_", i, ".pgm"])
-        matchBool (fileExists path)
-            (loadN (i + 1) (cons (loadSample path) acc))
-            (loadN (i + 1) acc)
-    ))
-    loadN 0 []
-)
+# Try to load a sample, return acc with or without it
+~tryLoadSample path,acc (match (fileExists path) | true -> cons (loadSample path) acc | false -> acc)
 
-# Load all training data (digits 0-9, up to 15 samples each)
-~loadAllSamples dir (
-    ~loadDigit d,acc (matchBool (gt d 9) acc (
-        seq (print (str ["Loading digit ", d, "..."]))
-        (loadDigit (d + 1) (append acc (loadDigitSamples d 15 dir)))
-    ))
-    loadDigit 0 []
-)
+# Load samples for one digit, trying indices 0..count-1
+~loadN digit,i,count,dir,acc (match (gte i count)
+    | true -> acc
+    | false -> loadN digit (i + 1) count dir (tryLoadSample (str [dir, "/", digit, "_", i, ".pgm"]) acc))
+
+# Load all training data (digits 0-9)
+~loadDigit d,numPerDigit,dir,acc (match (gt d 9)
+    | true -> acc
+    | false -> seq (print (str ["Loading digit ", d, "..."])) (loadDigit (d + 1) numPerDigit dir (append acc (loadN d 0 numPerDigit dir []))))
+
+~loadAllSamples numPerDigit,dir (loadDigit 0 numPerDigit dir [])
 
 # Compute loss on a single sample
-~sampleLoss net,sample (
-    @acts (forward net (get sample "input"))
-    @output (get acts "output")
-    crossEntropy output (get sample "label")
-)
+~sampleLoss net,sample (crossEntropy (get (forward net (get sample "input")) "output") (get sample "label"))
 
-# Compute average loss over all samples
-~avgLoss net,samples (
-    @totalLoss (foldl (|>acc. |>s. acc + (sampleLoss net s)) 0.0 samples)
-    totalLoss / (toFloat (len samples))
-)
+# Compute average loss
+~avgLoss net,samples ((foldl (|>acc. |>s. acc + (sampleLoss net s)) 0.0 samples) / (toFloat (len samples)))
 
-# Train for one epoch with per-sample progress
-~trainEpochVerbose net,samples,lr,sampleIdx (matchList samples
-    (|>_. net)
-    (|>s. |>rest.
-        @net2 (trainOne net (get s "input") (get s "label") lr)
-        seq (print (str ["  sample ", sampleIdx, "/", sampleIdx + (len rest), " label=", (get s "label")]))
-        (trainEpochVerbose net2 rest lr (sampleIdx + 1))
-    ))
+# Train one sample and print progress
+~trainOneSample net,s,lr,idx,total (seq (print (str ["  sample ", idx, "/", total, " label=", (get s "label")])) (trainOne net (get s "input") (get s "label") lr))
 
-# Compute accuracy on a set of samples
-~computeAccuracy net,samples (
-    @correct (foldl (|>acc. |>s.
-        @pred (predict net (get s "input"))
-        matchBool (eq pred (get s "label")) (acc + 1) acc
-    ) 0 samples)
-    @total (len samples)
-    (toFloat correct) / (toFloat total)
+# Train one epoch with per-sample progress
+~trainEpochV net,samples,lr,idx,total (matchList samples (|>_. net) (|>s. |>rest. trainEpochV (trainOneSample net s lr idx total) rest lr (idx + 1) total))
+
+# Compute accuracy
+~countCorrect net,samples,acc (matchList samples (|>_. acc) (|>s. |>rest. match (eq (predict net (get s "input")) (get s "label")) | true -> countCorrect net rest (acc + 1) | false -> countCorrect net rest acc))
+
+~computeAccuracy net,samples ((toFloat (countCorrect net samples 0)) / (toFloat (len samples)))
+
+# Run one epoch: train + print metrics
+~runEpoch net,samples,lr (
+    @net2 (trainEpochV net samples lr 1 (len samples))
+    @acc (computeAccuracy net2 samples)
+    @loss (avgLoss net2 samples)
+    seq (print (str ["  accuracy: ", acc, "  loss: ", loss])) net2
 )
 
 # Main training loop
 ~trainLoop net,samples,epoch,maxEpochs,lr (match (gt epoch maxEpochs)
     | true -> net
-    | false ->
-        seq (print (str ["=== Epoch ", epoch, "/", maxEpochs, " ==="]))
-        (@net2 (trainEpochVerbose net samples lr 1)
-        @acc (computeAccuracy net2 samples)
-        @loss (avgLoss net2 samples)
-        seq (print (str ["  accuracy: ", acc, "  loss: ", loss]))
-        (trainLoop net2 samples (epoch + 1) maxEpochs lr)))
+    | false -> seq (print (str ["=== Epoch ", epoch, "/", maxEpochs, " ==="])) (trainLoop (runEpoch net samples lr) samples (epoch + 1) maxEpochs lr))
 
 # === MAIN ===
 
 seq (print "=== Churing Neural Network Training ===") 0
-seq (print "Architecture: 1024 -> 128 (ReLU) -> 64 (ReLU) -> 10 (Softmax)") 0
+seq (print "Architecture: 1024 -> 32 (ReLU) -> 16 (ReLU) -> 10 (Softmax)") 0
 
-# Load training data
-@samples (loadAllSamples "examples/digits/data/train")
+# Load training data (3 samples per digit = 30 total)
+@samples (loadAllSamples 3 "examples/digits/data/train")
 seq (print (str ["Loaded ", (len samples), " training samples"])) 0
 
 # Initialize network
-seq (print "Initializing network (140,106 parameters)...") 0
+seq (print "Initializing network (33,578 parameters)...") 0
 @net (initNetwork 0)
 seq (print "Network initialized with Xavier weights") 0
 
-# Train for 3 epochs with learning rate 0.01
-@trained (trainLoop net samples 1 3 0.01)
+# Train for 2 epochs with learning rate 0.05
+@trained (trainLoop net samples 1 2 0.05)
 
-# Compute final accuracy
+# Final accuracy
 @finalAcc (computeAccuracy trained samples)
 seq (print (str ["=== Final training accuracy: ", finalAcc, " ==="])) 0
 
-# Save weights as JSON
+# Save weights
 seq (print "Saving weights to examples/digits/weights.json...") 0
 writeFile "examples/digits/weights.json" (toJson trained)
 seq (print "Done!") 0
