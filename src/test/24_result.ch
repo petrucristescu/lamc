@@ -28,10 +28,10 @@ assert (isErr still_err)
 
 # bindResult — chain computations
 ~safeDivide x,y (
-    try (ok (div x y)) (|>e. err e)
+    try (ok (x / y)) (|>e. err e)
 )
 @chained (bindResult (|>v. safeDivide v 2) (ok 10))
-assert (eq (unwrapOr 0.0 chained) 5.0)
+assert (eq (unwrapOr 0 chained) 5)
 
 @chained_err (bindResult (|>v. safeDivide v 0) (ok 10))
 assert (isErr chained_err)

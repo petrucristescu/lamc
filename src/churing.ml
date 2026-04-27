@@ -20,6 +20,7 @@ let () =
     close_in ic;
     s
   in
+  Eval.source_dir := Filename.dirname !filename;
   try
     let exprs = Parser.parse_and_infer ~show_types:!show_types input in
     if !show_ast then Ast.print_ast exprs;

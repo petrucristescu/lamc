@@ -23,10 +23,19 @@ and env = value StringMap.t
 exception RuntimeError of string
 exception AssertionFailure of string
 
+(* Directory of the source file being executed — set by churing.ml *)
+let source_dir = ref ""
+
 (* Load and parse a library file *)
 let load_library library_name =
   (* Define multiple possible library paths to try *)
   let possible_paths = [
+    (* Path relative to source file's directory (lib/ subfolder) *)
+    Filename.concat !source_dir "lib";
+    (* Path relative to source file's parent directory (lib/ subfolder) *)
+    Filename.concat (Filename.dirname !source_dir) "lib";
+    (* Path relative to source file's directory *)
+    !source_dir;
     (* Path relative to executable in _build *)
     Filename.concat (Filename.dirname Sys.argv.(0)) "../lib";
     (* Path in source directory *)
@@ -972,6 +981,9 @@ let rec eval_with_imports env expr =
               | Let (name, value_expr) ->
                   let (_, value) = eval_with_imports acc_env value_expr in
                   StringMap.add name (force value) acc_env
+              | Import _ ->
+                  let (new_env, _) = eval_with_imports acc_env expr in
+                  new_env
               | _ ->
                   let (_, v) = eval_with_imports acc_env expr in
                   ignore (force v);
@@ -1009,9 +1021,14 @@ let rec eval_with_imports env expr =
       let rec values_equal a b =
         match a, b with
         | VInt x, VInt y -> x = y
+        | VFloat x, VFloat y -> x = y
+        | VInt x, VFloat y -> float_of_int x = y
+        | VFloat x, VInt y -> x = float_of_int y
         | VLong x, VLong y -> x = y
         | VInt x, VLong y -> Int64.of_int x = y
         | VLong x, VInt y -> x = Int64.of_int y
+        | VLong x, VFloat y -> Int64.to_float x = y
+        | VFloat x, VLong y -> x = Int64.to_float y
         | VString x, VString y -> x = y
         | VBool x, VBool y -> x = y
         | VList xs, VList ys ->

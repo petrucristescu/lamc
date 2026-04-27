@@ -298,6 +298,7 @@ and parse_app tokens =
     match toks with
     | (Integer _, _, _) :: _
     | (Long _, _, _) :: _
+    | (Float _, _, _) :: _
     | (Ident _, _, _) :: _
     | (LParen, _, _) :: _
     | (LBracket, _, _) :: _
