@@ -13,11 +13,11 @@
 )
 ~makeImage rects (map (|>i. pixelAt i rects) (range 0 1024))
 
+# Clamp a value to [0.0, 1.0]
+~clamp01 v (matchBool (lt v 0.0) 0.0 (matchBool (gt v 1.0) 1.0 v))
+
 # Add random noise to pixels
-~addNoise pixels,amount (map (|>p.
-    @v (p + (random 0) * amount * 2.0 - amount)
-    matchBool (lt v 0.0) 0.0 (matchBool (gt v 1.0) 1.0 v)
-) pixels)
+~addNoise pixels,amount (map (|>p. clamp01 (p + (random 0) * amount * 2.0 - amount)) pixels)
 
 # Shift image by dx, dy (fill edges with 0)
 ~shiftPixelAt i,pixels,dx,dy (
@@ -25,7 +25,10 @@
     @x (i - y * 32)
     @sx (x - dx)
     @sy (y - dy)
-    matchBool (or (lt sx 0) (or (gte sx 32) (or (lt sy 0) (gte sy 32)))) 0.0 (nth pixels (sy * 32 + sx))
+    @outOfBounds (or (lt sx 0) (or (gte sx 32) (or (lt sy 0) (gte sy 32))))
+    match outOfBounds
+    | true -> 0.0
+    | false -> nth pixels (sy * 32 + sx)
 )
 ~shiftImage pixels,dx,dy (map (|>i. shiftPixelAt i pixels dx dy) (range 0 1024))
 
@@ -54,17 +57,17 @@
     writePgm path 32 32 noisy
 )
 
+# Sequence two expressions, return second
+~seq a,b b
+
 # Generate n variations for one digit
-~generateN digit,n,startIdx,dir (matchBool (eq n 0) 0 (
-    generateOne digit startIdx dir
-    generateN digit (n - 1) (startIdx + 1) dir
-))
+~generateN digit,n,startIdx,dir (match n
+    | 0 -> 0
+    | _ -> seq (generateOne digit startIdx dir) (generateN digit (n - 1) (startIdx + 1) dir))
 
 # Generate all digits
-~generateDigit d,trainDir,testDir (matchBool (gt d 9) 0 (
-    generateN d 15 0 trainDir
-    generateN d 5 0 testDir
-    generateDigit (d + 1) trainDir testDir
-))
+~generateDigit d,trainDir,testDir (match (gt d 9)
+    | true -> 0
+    | false -> seq (generateN d 15 0 trainDir) (seq (generateN d 5 0 testDir) (generateDigit (d + 1) trainDir testDir)))
 
 generateDigit 0 "examples/digits/data/train" "examples/digits/data/test"
