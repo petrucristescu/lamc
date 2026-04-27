@@ -7,7 +7,7 @@ seq (print "Loading weights...") 0
 @net (fromJson weightsJson)
 seq (print "Weights loaded.") 0
 
-# Read input image (hardcoded path - change to test different images)
+# Read input image
 @imgPath "examples/digits/data/test/0_0.pgm"
 seq (print (str ["Image: ", imgPath])) 0
 @img (readPgm imgPath)
@@ -16,7 +16,7 @@ seq (print (str ["Image: ", imgPath])) 0
 # Run prediction
 @acts (forward net pixels)
 @output (get acts "output")
-@prediction (argmax output)
+@prediction (arrayArgmax output)
 
 print (str ["Predicted digit: ", prediction])
-print (str ["Confidence: ", output])
+print (str ["Confidence: ", (arrayToList output)])

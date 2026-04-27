@@ -17,6 +17,7 @@ type value =
   | VFun of string list * expr * env
   | VRecFun of string * string list * expr * env  (* name * args * body * env — binds itself at call time *)
   | VPrim of (value list -> value)
+  | VFloatArray of float array  (* Native mutable float array for fast numeric ops *)
   | VTailCall of env * expr  (* Trampoline marker for tail call optimization *)
 and env = value StringMap.t
 
@@ -88,6 +89,11 @@ let rec string_of_value = function
   | VNil -> "nil"
   | VDict entries ->
       "{" ^ String.concat ", " (List.map (fun (k, v) -> k ^ ": " ^ string_of_value v) entries) ^ "}"
+  | VFloatArray arr ->
+      let strs = Array.to_list (Array.map (fun f ->
+        if Float.equal (Float.round f) f then string_of_int (int_of_float f)
+        else string_of_float f) arr) in
+      "FloatArray[" ^ String.concat ", " strs ^ "]"
   | VTailCall _ -> "<tailcall>"
   | VRecFun _ | _ -> "<fun>"
 
@@ -253,6 +259,200 @@ let create_math_functions env =
   |> StringMap.add "max" (VPrim (fun args ->
       let a = expect_numeric "max" (List.hd args) in
       VPrim (fun args -> VFloat (Float.max a (expect_numeric "max" (List.hd args))))))
+
+(* Float array primitives — O(1) access, native matrix ops *)
+let create_array_functions env =
+  let expect_array name = function
+    | VFloatArray a -> a
+    | _ -> raise (RuntimeError (name ^ ": expected FloatArray"))
+  in
+  let expect_numeric name = function
+    | VInt n -> float_of_int n
+    | VLong n -> Int64.to_float n
+    | VFloat f -> f
+    | _ -> raise (RuntimeError (name ^ ": expected numeric"))
+  in
+  let expect_int name = function
+    | VInt n -> n
+    | _ -> raise (RuntimeError (name ^ ": expected int"))
+  in
+  env
+  (* arrayCreate n val — create array of n elements, all set to val *)
+  |> StringMap.add "arrayCreate" (VPrim (fun args ->
+      let n = expect_int "arrayCreate" (List.hd args) in
+      VPrim (fun args ->
+        let v = expect_numeric "arrayCreate" (List.hd args) in
+        VFloatArray (Array.make n v))))
+  (* arrayGet arr i — O(1) index access *)
+  |> StringMap.add "arrayGet" (VPrim (fun args ->
+      let arr = expect_array "arrayGet" (List.hd args) in
+      VPrim (fun args ->
+        let i = expect_int "arrayGet" (List.hd args) in
+        if i < 0 || i >= Array.length arr then
+          raise (RuntimeError "arrayGet: index out of bounds")
+        else VFloat arr.(i))))
+  (* arraySet arr i val — returns NEW array with element changed *)
+  |> StringMap.add "arraySet" (VPrim (fun args ->
+      let arr = expect_array "arraySet" (List.hd args) in
+      VPrim (fun args ->
+        let i = expect_int "arraySet" (List.hd args) in
+        VPrim (fun args ->
+          let v = expect_numeric "arraySet" (List.hd args) in
+          let a = Array.copy arr in
+          a.(i) <- v;
+          VFloatArray a))))
+  (* arrayLength arr *)
+  |> StringMap.add "arrayLength" (VPrim (fun args ->
+      VInt (Array.length (expect_array "arrayLength" (List.hd args)))))
+  (* arrayFromList list — convert list of numbers to FloatArray *)
+  |> StringMap.add "arrayFromList" (VPrim (fun args ->
+      match List.hd args with
+      | VList vs ->
+          let floats = List.map (fun v -> match v with
+            | VInt n -> float_of_int n
+            | VFloat f -> f
+            | VLong n -> Int64.to_float n
+            | _ -> raise (RuntimeError "arrayFromList: expected numeric list")) vs in
+          VFloatArray (Array.of_list floats)
+      | _ -> raise (RuntimeError "arrayFromList: expected list")))
+  (* arrayToList arr — convert FloatArray to list *)
+  |> StringMap.add "arrayToList" (VPrim (fun args ->
+      let arr = expect_array "arrayToList" (List.hd args) in
+      VList (Array.to_list (Array.map (fun f -> VFloat f) arr))))
+  (* arrayDot a b — dot product of two arrays *)
+  |> StringMap.add "arrayDot" (VPrim (fun args ->
+      let a = expect_array "arrayDot" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_array "arrayDot" (List.hd args) in
+        let n = Array.length a in
+        if n <> Array.length b then raise (RuntimeError "arrayDot: length mismatch");
+        let sum = ref 0.0 in
+        for i = 0 to n - 1 do sum := !sum +. a.(i) *. b.(i) done;
+        VFloat !sum)))
+  (* arrayVecAdd a b — element-wise addition, returns new array *)
+  |> StringMap.add "arrayVecAdd" (VPrim (fun args ->
+      let a = expect_array "arrayVecAdd" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_array "arrayVecAdd" (List.hd args) in
+        VFloatArray (Array.init (Array.length a) (fun i -> a.(i) +. b.(i))))))
+  (* arrayVecSub a b *)
+  |> StringMap.add "arrayVecSub" (VPrim (fun args ->
+      let a = expect_array "arrayVecSub" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_array "arrayVecSub" (List.hd args) in
+        VFloatArray (Array.init (Array.length a) (fun i -> a.(i) -. b.(i))))))
+  (* arrayVecMul a b — element-wise multiplication *)
+  |> StringMap.add "arrayVecMul" (VPrim (fun args ->
+      let a = expect_array "arrayVecMul" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_array "arrayVecMul" (List.hd args) in
+        VFloatArray (Array.init (Array.length a) (fun i -> a.(i) *. b.(i))))))
+  (* arrayVecScale s arr *)
+  |> StringMap.add "arrayVecScale" (VPrim (fun args ->
+      let s = expect_numeric "arrayVecScale" (List.hd args) in
+      VPrim (fun args ->
+        let a = expect_array "arrayVecScale" (List.hd args) in
+        VFloatArray (Array.map (fun x -> s *. x) a))))
+  (* arraySum arr *)
+  |> StringMap.add "arraySum" (VPrim (fun args ->
+      let a = expect_array "arraySum" (List.hd args) in
+      VFloat (Array.fold_left (+.) 0.0 a)))
+  (* arrayArgmax arr — index of maximum element *)
+  |> StringMap.add "arrayArgmax" (VPrim (fun args ->
+      let a = expect_array "arrayArgmax" (List.hd args) in
+      let max_i = ref 0 in
+      for i = 1 to Array.length a - 1 do
+        if a.(i) > a.(!max_i) then max_i := i
+      done;
+      VInt !max_i))
+  (* arrayMatVecMul mat vec — mat is list of FloatArrays (rows), vec is FloatArray *)
+  |> StringMap.add "arrayMatVecMul" (VPrim (fun args ->
+      match List.hd args with
+      | VList rows ->
+          VPrim (fun args ->
+            let vec = expect_array "arrayMatVecMul" (List.hd args) in
+            let n = List.length rows in
+            let result = Array.make n 0.0 in
+            List.iteri (fun i row ->
+              match row with
+              | VFloatArray r ->
+                  let sum = ref 0.0 in
+                  for j = 0 to Array.length r - 1 do
+                    sum := !sum +. r.(j) *. vec.(j)
+                  done;
+                  result.(i) <- !sum
+              | _ -> raise (RuntimeError "arrayMatVecMul: rows must be FloatArrays")
+            ) rows;
+            VFloatArray result)
+      | _ -> raise (RuntimeError "arrayMatVecMul: expected list of FloatArrays")))
+  (* arrayOuterProduct a b — returns list of FloatArrays *)
+  |> StringMap.add "arrayOuterProduct" (VPrim (fun args ->
+      let a = expect_array "arrayOuterProduct" (List.hd args) in
+      VPrim (fun args ->
+        let b = expect_array "arrayOuterProduct" (List.hd args) in
+        VList (Array.to_list (Array.map (fun ai ->
+          VFloatArray (Array.map (fun bj -> ai *. bj) b)) a)))))
+  (* arrayMatTranspose mat — list of FloatArrays → list of FloatArrays *)
+  |> StringMap.add "arrayMatTranspose" (VPrim (fun args ->
+      match List.hd args with
+      | VList [] -> VList []
+      | VList rows ->
+          let arrs = List.map (function
+            | VFloatArray a -> a
+            | _ -> raise (RuntimeError "arrayMatTranspose: rows must be FloatArrays")) rows in
+          let arr_of_arrs = Array.of_list arrs in
+          let nrows = Array.length arr_of_arrs in
+          let ncols = Array.length arr_of_arrs.(0) in
+          let result = Array.init ncols (fun j ->
+            VFloatArray (Array.init nrows (fun i -> arr_of_arrs.(i).(j)))) in
+          VList (Array.to_list result)
+      | _ -> raise (RuntimeError "arrayMatTranspose: expected list of FloatArrays")))
+  (* arrayMatAdd a b — element-wise addition of matrices (list of FloatArrays) *)
+  |> StringMap.add "arrayMatAdd" (VPrim (fun args ->
+      match List.hd args with
+      | VList rows_a ->
+          VPrim (fun args ->
+            match List.hd args with
+            | VList rows_b ->
+                VList (List.map2 (fun a b ->
+                  match a, b with
+                  | VFloatArray aa, VFloatArray bb ->
+                      VFloatArray (Array.init (Array.length aa) (fun i -> aa.(i) +. bb.(i)))
+                  | _ -> raise (RuntimeError "arrayMatAdd: rows must be FloatArrays")) rows_a rows_b)
+            | _ -> raise (RuntimeError "arrayMatAdd: expected list of FloatArrays"))
+      | _ -> raise (RuntimeError "arrayMatAdd: expected list of FloatArrays")))
+  (* arrayMatScale s mat — scalar × matrix *)
+  |> StringMap.add "arrayMatScale" (VPrim (fun args ->
+      let s = expect_numeric "arrayMatScale" (List.hd args) in
+      VPrim (fun args ->
+        match List.hd args with
+        | VList rows ->
+            VList (List.map (fun r ->
+              match r with
+              | VFloatArray a -> VFloatArray (Array.map (fun x -> s *. x) a)
+              | _ -> raise (RuntimeError "arrayMatScale: rows must be FloatArrays")) rows)
+        | _ -> raise (RuntimeError "arrayMatScale: expected list of FloatArrays"))))
+  (* arrayRandom n scale — random array of n elements in [-scale, scale] *)
+  |> StringMap.add "arrayRandom" (VPrim (fun args ->
+      let n = expect_int "arrayRandom" (List.hd args) in
+      VPrim (fun args ->
+        let scale = expect_numeric "arrayRandom" (List.hd args) in
+        VFloatArray (Array.init n (fun _ -> Random.float (2.0 *. scale) -. scale)))))
+  (* arraySoftmax arr — numerically stable softmax *)
+  |> StringMap.add "arraySoftmax" (VPrim (fun args ->
+      let a = expect_array "arraySoftmax" (List.hd args) in
+      let max_v = Array.fold_left Float.max neg_infinity a in
+      let exps = Array.map (fun x -> Float.exp (x -. max_v)) a in
+      let total = Array.fold_left (+.) 0.0 exps in
+      VFloatArray (Array.map (fun x -> x /. total) exps)))
+  (* arrayRelu arr *)
+  |> StringMap.add "arrayRelu" (VPrim (fun args ->
+      let a = expect_array "arrayRelu" (List.hd args) in
+      VFloatArray (Array.map (fun x -> Float.max 0.0 x) a)))
+  (* arrayReluDeriv arr — 1.0 if > 0, else 0.0 *)
+  |> StringMap.add "arrayReluDeriv" (VPrim (fun args ->
+      let a = expect_array "arrayReluDeriv" (List.hd args) in
+      VFloatArray (Array.map (fun x -> if x > 0.0 then 1.0 else 0.0) a)))
 
 (* String primitives *)
 let create_string_functions env =
@@ -513,6 +713,11 @@ let rec value_to_json = function
   | VBool false -> "false"
   | VNil -> "null"
   | VList vs -> "[" ^ String.concat "," (List.map value_to_json vs) ^ "]"
+  | VFloatArray arr ->
+      let strs = Array.to_list (Array.map (fun f ->
+        if Float.equal (Float.round f) f then string_of_int (int_of_float f)
+        else string_of_float f) arr) in
+      "{\"__floatarray__\":[" ^ String.concat "," strs ^ "]}"
   | VDict entries ->
       "{" ^ String.concat "," (List.map (fun (k, v) ->
         "\"" ^ k ^ "\":" ^ value_to_json v) entries) ^ "}"
@@ -579,7 +784,16 @@ let json_to_value s =
       let v, i = parse_value (i+1) in
       let i = skip_ws i in
       if i < len && s.[i] = ',' then parse_object (i+1) ((key, v) :: acc)
-      else if i < len && s.[i] = '}' then (VDict (List.rev ((key, v) :: acc)), i+1)
+      else if i < len && s.[i] = '}' then
+        let entries = List.rev ((key, v) :: acc) in
+        (* Detect __floatarray__ tag and reconstruct VFloatArray *)
+        (match entries with
+         | [("__floatarray__", VList nums)] ->
+             let floats = List.map (fun v -> match v with
+               | VFloat f -> f | VInt n -> float_of_int n
+               | _ -> raise (RuntimeError "fromJson: invalid floatarray element")) nums in
+             (VFloatArray (Array.of_list floats), i+1)
+         | _ -> (VDict entries, i+1))
       else raise (RuntimeError "fromJson: expected ',' or '}' in object")
     else raise (RuntimeError "fromJson: expected key string in object")
   in
@@ -959,6 +1173,7 @@ let rec eval_with_imports env expr =
         match lib_name with
         | "operators" -> create_church_booleans env
         | "math" -> create_math_functions env
+        | "array" -> create_array_functions env
         | "string" -> create_string_functions env
         | "list" -> create_list_functions env
         | "time" -> create_time_functions env
@@ -1041,6 +1256,7 @@ let rec eval_with_imports env expr =
         | VCons (h1, t1), VCons (h2, t2) ->
             values_equal h1 h2 && values_equal t1 t2
         | VNil, VNil -> true
+        | VFloatArray a, VFloatArray b -> a = b
         | VDict a, VDict b ->
             List.length a = List.length b &&
             List.for_all (fun (k, v) ->
@@ -1193,7 +1409,7 @@ let rec eval_toplevel (env : env) (expr : expr) : env * value option =
       (env, Some v)
 
 let load_prelude () =
-  let stdlib = ["operators"; "math"; "string"; "list"; "time"; "io"; "dict"; "json"; "mysql"; "church_list"; "result"; "vector"; "matrix"; "activations"; "loss"; "pgm"; "nn"] in
+  let stdlib = ["operators"; "math"; "array"; "string"; "list"; "time"; "io"; "dict"; "json"; "mysql"; "church_list"; "result"; "vector"; "matrix"; "activations"; "loss"; "pgm"; "nn"] in
   List.fold_left (fun env lib ->
     fst (eval_with_imports env (Import lib))
   ) StringMap.empty stdlib
