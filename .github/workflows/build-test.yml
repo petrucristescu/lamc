@@ -10,6 +10,20 @@ jobs:
   build-and-test:
     runs-on: ubuntu-22.04
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: churingtest
+          MYSQL_DATABASE: churingdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pchuringtest --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=6
+
     steps:
       - uses: actions/checkout@v3
 
@@ -35,6 +49,9 @@ jobs:
           opam init --disable-sandboxing --no-setup --compiler=ocaml-base-compiler.5.1.1 -y
           opam install dune alcotest -y
 
+      - name: Seed database
+        run: mysql -h 127.0.0.1 -u root -pchuringtest churingdb < test/db/init.sql
+
       - name: Build
         run: |
           eval $(opam env)
@@ -46,6 +63,12 @@ jobs:
           dune runtest
 
       - name: Run integration tests
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: root
+          MYSQL_PASSWORD: churingtest
+          MYSQL_DATABASE: churingdb
         run: |
           eval $(opam env)
           mkdir -p test_results
@@ -53,11 +76,6 @@ jobs:
           for test_file in src/test/*.ch; do
             test_name=$(basename "$test_file" .ch)
             expected_output="src/test/${test_name}.ch.out"
-
-            if [[ "$test_name" == *mysql* ]]; then
-              echo "SKIP: $test_name (requires database)"
-              continue
-            fi
 
             _build/default/src/churing.exe "$test_file" > "test_results/${test_name}.out" 2>&1
             exit_code=$?
