@@ -54,6 +54,11 @@ jobs:
             test_name=$(basename "$test_file" .ch)
             expected_output="src/test/${test_name}.ch.out"
 
+            if [[ "$test_name" == *mysql* ]]; then
+              echo "SKIP: $test_name (requires database)"
+              continue
+            fi
+
             _build/default/src/churing.exe "$test_file" > "test_results/${test_name}.out" 2>&1
             exit_code=$?
 
