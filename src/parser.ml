@@ -456,6 +456,7 @@ let string_of_typ t =
     | TFun (a, b) -> "(" ^ aux a ^ " -> " ^ aux b ^ ")"
     | TList a -> "[" ^ aux a ^ "]"
     | TDict a -> "{String: " ^ aux a ^ "}"
+    | TArray a -> "Array[" ^ aux a ^ "]"
     | TUnknown -> "?"
   in aux t
 

@@ -14,6 +14,7 @@ let rec apply subst t =
   | TFun (a, b) -> TFun (apply subst a, apply subst b)
   | TList a -> TList (apply subst a)
   | TDict a -> TDict (apply subst a)
+  | TArray a -> TArray (apply subst a)
   | _ -> t
 
 let compose s1 s2 =
@@ -34,6 +35,7 @@ let rec occurs v = function
   | TFun (a, b) -> occurs v a || occurs v b
   | TList a -> occurs v a
   | TDict a -> occurs v a
+  | TArray a -> occurs v a
   | _ -> false
 
 let rec unify t1 t2 =
@@ -49,6 +51,7 @@ let rec unify t1 t2 =
       compose s2 s1
   | TList a1, TList a2 -> unify a1 a2
   | TDict a1, TDict a2 -> unify a1 a2
+  | TArray a1, TArray a2 -> unify a1 a2
   | _ -> raise (TypeError ("Cannot unify types: " ^ Ast.string_of_typ t1 ^ " and " ^ Ast.string_of_typ t2))
 
 (* Scheme helpers *)
@@ -66,6 +69,7 @@ let free_vars_typ t =
     | TFun (a, b) -> aux (aux acc a) b
     | TList a -> aux acc a
     | TDict a -> aux acc a
+    | TArray a -> aux acc a
     | _ -> acc
   in aux [] t
 
@@ -91,6 +95,7 @@ let instantiate (Forall (vars, t)) =
     | TFun (a, b) -> TFun (aux a, aux b)
     | TList a -> TList (aux a)
     | TDict a -> TDict (aux a)
+    | TArray a -> TArray (aux a)
     | t -> t
   in aux t
 
@@ -289,6 +294,39 @@ let add_operators_to_env env =
   let mb_b = fresh_var () in
   (* matchBool : Bool -> a -> a -> a *)
   let env = StringMap.add "matchBool" (mono (TFun (TBool, TFun (mb_a, TFun (mb_b, mb_a))))) env in
+
+  (* Generic array operations — polymorphic over element type *)
+  let ar_a = fresh_var () in
+  let env = StringMap.add "arrayCreate" (mono (TFun (TInt, TFun (ar_a, TArray ar_a)))) env in
+  let ar_b = fresh_var () in
+  let env = StringMap.add "arrayGet" (mono (TFun (TArray ar_b, TFun (TInt, ar_b)))) env in
+  let ar_c = fresh_var () in
+  let env = StringMap.add "arraySet" (mono (TFun (TArray ar_c, TFun (TInt, TFun (ar_c, TArray ar_c))))) env in
+  let ar_d = fresh_var () in
+  let env = StringMap.add "arrayLength" (mono (TFun (TArray ar_d, TInt))) env in
+  let ar_e = fresh_var () in
+  let env = StringMap.add "arrayFromList" (mono (TFun (TList ar_e, TArray ar_e))) env in
+  let ar_f = fresh_var () in
+  let env = StringMap.add "arrayToList" (mono (TFun (TArray ar_f, TList ar_f))) env in
+
+  (* Float-specific array operations *)
+  let t_fa = TArray TFloat in
+  let env = StringMap.add "arrayDot" (mono (TFun (t_fa, TFun (t_fa, TFloat)))) env in
+  let env = StringMap.add "arrayVecAdd" (mono (TFun (t_fa, TFun (t_fa, t_fa)))) env in
+  let env = StringMap.add "arrayVecSub" (mono (TFun (t_fa, TFun (t_fa, t_fa)))) env in
+  let env = StringMap.add "arrayVecMul" (mono (TFun (t_fa, TFun (t_fa, t_fa)))) env in
+  let env = StringMap.add "arrayVecScale" (mono (TFun (TFloat, TFun (t_fa, t_fa)))) env in
+  let env = StringMap.add "arraySum" (mono (TFun (t_fa, TFloat))) env in
+  let env = StringMap.add "arrayArgmax" (mono (TFun (t_fa, TInt))) env in
+  let env = StringMap.add "arrayMatVecMul" (mono (TFun (TList t_fa, TFun (t_fa, t_fa)))) env in
+  let env = StringMap.add "arrayOuterProduct" (mono (TFun (t_fa, TFun (t_fa, TList t_fa)))) env in
+  let env = StringMap.add "arrayMatTranspose" (mono (TFun (TList t_fa, TList t_fa))) env in
+  let env = StringMap.add "arrayMatAdd" (mono (TFun (TList t_fa, TFun (TList t_fa, TList t_fa)))) env in
+  let env = StringMap.add "arrayMatScale" (mono (TFun (TFloat, TFun (TList t_fa, TList t_fa)))) env in
+  let env = StringMap.add "arrayRandom" (mono (TFun (TInt, TFun (TFloat, t_fa)))) env in
+  let env = StringMap.add "arraySoftmax" (mono (TFun (t_fa, t_fa))) env in
+  let env = StringMap.add "arrayRelu" (mono (TFun (t_fa, t_fa))) env in
+  let env = StringMap.add "arrayReluDeriv" (mono (TFun (t_fa, t_fa))) env in
   env
 
 let rec infer env = function

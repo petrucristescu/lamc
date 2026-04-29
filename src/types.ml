@@ -8,6 +8,7 @@ type typ =
   | TFun of typ * typ
   | TList of typ
   | TDict of typ
+  | TArray of typ
   | TUnknown
 
 type scheme = Forall of string list * typ
@@ -21,6 +22,7 @@ let free_type_vars_typ t =
     | TFun (a, b) -> aux (aux acc a) b
     | TList a -> aux acc a
     | TDict a -> aux acc a
+    | TArray a -> aux acc a
     | _ -> acc
   in aux [] t
 
@@ -46,5 +48,6 @@ let instantiate (Forall (vars, t)) =
     | TFun (a, b) -> TFun (subst_typ a, subst_typ b)
     | TList a -> TList (subst_typ a)
     | TDict a -> TDict (subst_typ a)
+    | TArray a -> TArray (subst_typ a)
     | t -> t
   in subst_typ t
